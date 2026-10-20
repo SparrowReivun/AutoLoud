@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest
+pyloudnorm
+pyinstaller>=6.0

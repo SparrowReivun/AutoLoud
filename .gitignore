@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+build/
+dist/
+*.log
+.pytest_cache/
+_src-snapshot.zip
+# calibration music: only the bundled demo track is versioned
+assets/music/*
+!assets/music/README.md
+!assets/music/default/
+assets/music/default/*
+!assets/music/default/McG-pro1.flac
