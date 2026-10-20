@@ -7,6 +7,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write   # needed to create the Release on v* tags
+
 jobs:
   test:
     runs-on: ubuntu-latest
