@@ -100,12 +100,13 @@ _T = {
     "backend": ("后端", "Backend"),
 }
 
-_lang = "zh"
+_lang = "en"   # en-ui branch: English-only build
 
 
 def set_language(lang: str) -> None:
+    """English-only build: the language is fixed regardless of config."""
     global _lang
-    _lang = "en" if lang == "en" else "zh"
+    _lang = "en"
 
 
 def t(key: str) -> str:

@@ -1,5 +1,5 @@
 @echo off
-REM Local Windows build: creates dist\AutoLoud.exe
+REM Local Windows build: creates dist\AutoLoud-en.exe
 setlocal
 cd /d "%~dp0"
 if not exist .venv (
@@ -11,7 +11,7 @@ pip install -r requirements-dev.txt || goto :err
 python tools\make_icon.py
 pyinstaller --noconfirm --clean AutoLoud.spec || goto :err
 echo.
-echo Build finished: dist\AutoLoud.exe
+echo Build finished: dist\AutoLoud-en.exe
 exit /b 0
 :err
 echo Build FAILED.

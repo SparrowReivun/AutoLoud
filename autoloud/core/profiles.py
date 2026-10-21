@@ -46,7 +46,7 @@ class AppConfig:
     profiles: dict[str, DeviceProfile] = field(default_factory=dict)
     music_dir: str = ""           # folder with <genre>/*.wav|mp3|flac for calibration
     start_minimized: bool = False
-    language: str = "zh"
+    language: str = "en"
     config_version: int = 2       # bump when ControllerParams defaults change
 
     # ------------------------------------------------------------------
@@ -66,7 +66,7 @@ class AppConfig:
             cfg.selected_device_id = raw.get("selected_device_id", "")
             cfg.music_dir = raw.get("music_dir", "")
             cfg.start_minimized = raw.get("start_minimized", False)
-            cfg.language = raw.get("language", "zh")
+            cfg.language = "en"   # English-only build
             pr = raw.get("params", {})
             if int(raw.get("config_version", 1)) >= cfg.config_version:
                 cfg.params = ControllerParams(**{k: v for k, v in pr.items()

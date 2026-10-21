@@ -21,7 +21,7 @@ a = Analysis(
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, a.binaries, a.datas, [],
-    name="AutoLoud",
+    name="AutoLoud-en",
     icon="assets/autoloud.ico",
     console=False,
     upx=False,
