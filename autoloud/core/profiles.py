@@ -43,6 +43,7 @@ class AppMix:
     """Per-application mixer strip (keyed by process name)."""
     offset_db: float = 0.0        # user fader, -40..+40 dB, relative to the other apps
     auto: bool = True             # whether the bus auto-loudness gain applies to this app
+    alias: str = ""               # user label (e.g. "Apple Music" for AMP)
 
 
 @dataclass
@@ -105,6 +106,10 @@ class AppConfig:
             "apps": {k: asdict(v) for k, v in self.apps.items()},
         }
         self.path().write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def display_name(self, app_name: str) -> str:
+        m = self.apps.get(app_name)
+        return (m.alias.strip() if m and m.alias.strip() else app_name)
 
     def mix_for(self, app_name: str) -> AppMix:
         if app_name not in self.apps:

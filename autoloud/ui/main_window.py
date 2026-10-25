@@ -13,7 +13,7 @@ from autoloud.core.engine import Engine, EngineState
 from autoloud.core.controller import Phase
 from autoloud.ui import theme
 from autoloud.ui.i18n import t, set_language
-from autoloud.ui.widgets import LoudnessBar, Card, badge
+from autoloud.ui.widgets import LoudnessBar, Card, badge, NoWheelSlider
 from autoloud.ui.calibration import CalibrationWizard
 
 log = logging.getLogger(__name__)
@@ -153,12 +153,18 @@ class DashboardPage(QWidget):
 class AppsPage(QWidget):
     """Per-app mixer: fader (+/- mixer_range_db) + auto-loudness switch per app.
 
-    Always active, whether or not the bus auto-loudness is on.
+    Always active, whether or not the bus auto-loudness is on. Rows are
+    ordered: apps producing sound first, loudest (smoothed peak) on top.
     """
+    RESORT_S = 1.0
+
     def __init__(self, engine: Engine):
         super().__init__()
         self.engine = engine
         self.rows: dict[str, dict] = {}
+        self._smooth: dict[str, float] = {}
+        self._order: list[str] = []
+        self._last_sort = 0.0
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
         h = QLabel(t("apps.h")); h.setObjectName("h1"); lay.addWidget(h)
@@ -171,6 +177,7 @@ class AppsPage(QWidget):
         self._save_timer.timeout.connect(self.engine.config.save)
 
     def update_state(self, s: EngineState):
+        import time as _time
         seen = set()
         for sess in s.sessions:
             if sess.is_self:
@@ -179,12 +186,32 @@ class AppsPage(QWidget):
             if sess.key not in self.rows:
                 self._add_row(sess.key, sess.name)
             row = self.rows[sess.key]
+            pk = min(1.0, sess.peak * sess.volume) if sess.active else 0.0
+            sm = self._smooth.get(sess.key, pk)
+            self._smooth[sess.key] = sm + (pk - sm) * 0.3
             row["bar"].setValue(int(min(1.0, sess.peak) * 100))
-            row["lbl"].setText(f"{sess.name}   \u00b7   vol {sess.volume * 100:.0f}%" + ("" if sess.active else "   (idle)"))
+            row["active"] = sess.active
+            row["sub"].setText(f"{sess.name}   \u00b7   vol {sess.volume * 100:.0f}%" +
+                               ("" if sess.active else "   \u00b7   " + t("apps.idle")))
         for key in list(self.rows):
             if key not in seen:
                 w = self.rows.pop(key)["card"]
+                self._smooth.pop(key, None)
                 w.setParent(None); w.deleteLater()
+        now = _time.monotonic()
+        if now - self._last_sort >= self.RESORT_S:
+            self._last_sort = now
+            self._resort()
+
+    def _resort(self):
+        order = sorted(self.rows, key=lambda k: (not self.rows[k]["active"], -self._smooth.get(k, 0.0)))
+        if order == self._order:
+            return
+        self._order = order
+        for i, key in enumerate(order):
+            card = self.rows[key]["card"]
+            self.inner_lay.removeWidget(card)
+            self.inner_lay.insertWidget(i, card)
 
     def _changed(self, name: str):
         self.engine.mixer_changed()
@@ -196,7 +223,14 @@ class AppsPage(QWidget):
         rng = int(cfg.mixer_range_db)
         c = Card()
         top = QHBoxLayout()
-        lbl = QLabel(name); top.addWidget(lbl, 1)
+        alias = QLineEdit(mix.alias); alias.setPlaceholderText(name)
+        alias.setToolTip(t("apps.alias.tip")); alias.setMaximumWidth(260)
+        alias.setStyleSheet("font-weight:600;")
+        def alias_changed(text, m=mix, n=name):
+            m.alias = text; self._changed(n)
+        alias.textEdited.connect(alias_changed)
+        top.addWidget(alias)
+        sub = QLabel(name); sub.setObjectName("muted"); top.addWidget(sub, 1)
         auto = QCheckBox(t("apps.auto")); auto.setChecked(mix.auto)
         auto.setToolTip(t("apps.auto.tip"))
         def auto_changed(on, m=mix, n=name):
@@ -206,7 +240,7 @@ class AppsPage(QWidget):
         bar = QProgressBar(); bar.setRange(0, 100); bar.setTextVisible(False); bar.setFixedHeight(8)
         row = QHBoxLayout()
         row.addWidget(QLabel(t("apps.fader")))
-        sl = QSlider(Qt.Horizontal); sl.setRange(-rng, rng); sl.setValue(int(round(mix.offset_db)))
+        sl = NoWheelSlider(Qt.Horizontal); sl.setRange(-rng, rng); sl.setValue(int(round(mix.offset_db)))
         sl.setTickPosition(QSlider.TicksBelow); sl.setTickInterval(10)
         val = QLabel(f"{sl.value():+d} dB"); val.setMinimumWidth(56)
         def changed(v, m=mix, n=name, l=val):
@@ -217,7 +251,8 @@ class AppsPage(QWidget):
         row.addWidget(sl, 1); row.addWidget(val); row.addWidget(reset)
         c.body.addLayout(top); c.body.addWidget(bar); c.body.addLayout(row)
         self.inner_lay.insertWidget(self.inner_lay.count() - 1, c)
-        self.rows[key] = {"card": c, "bar": bar, "slider": sl, "lbl": lbl, "auto": auto}
+        self.rows[key] = {"card": c, "bar": bar, "slider": sl, "sub": sub, "auto": auto, "active": False}
+        self._order = []   # force a re-sort on the next tick
 
 
 # ----------------------------------------------------------------------
