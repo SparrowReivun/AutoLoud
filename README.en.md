@@ -15,6 +15,7 @@ AutoLoud levels every sound on Windows to the comfortable loudness you calibrate
 - **Onset guard**: when sound appears after silence, playback starts at your ceiling A and ramps to your comfort level B over 2 s. A sudden loud notification never blasts you.
 - **Window tracking**: every 30 s the gain is recomputed from that window's integrated loudness with a 2 s ramp, keeping the dynamics inside music and films intact.
 - **Safety limiter**: momentary loudness above B + 8 dB (an ad cut into the window) is pulled down in 0.3 s.
+- **Per-app mixer**: every app that produces sound gets a ±40 dB fader and an "Auto" switch, active even when the bus auto loudness is off; a fader above 0 dB is realised by raising the master and pulling the other apps down.
 - **Restores everything**: on exit all app volumes and the master volume return to where they were.
 
 ## Calibration

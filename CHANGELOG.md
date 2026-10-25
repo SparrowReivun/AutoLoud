@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Per-app mixer is now a standing feature: ±40 dB faders and a per-app "Auto" switch, working whether the bus auto loudness is on or off. Faders above 0 dB raise the master and attenuate the other apps.
+- Apps with Auto off are discounted from the loudness measurement (peak-meter share estimate) so they do not drag the bus gain.
+- Mixer faders are compensated in the controller so a -6 dB fader really is 6 dB quieter.
+- Calibration source can be any app that is playing; bundled tracks decode off the GUI thread.
+
 ## 0.1.0 — 2026-10-20
 
 First public version.

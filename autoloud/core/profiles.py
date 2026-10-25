@@ -39,6 +39,13 @@ class DeviceProfile:
 
 
 @dataclass
+class AppMix:
+    """Per-application mixer strip (keyed by process name)."""
+    offset_db: float = 0.0        # user fader, -40..+40 dB, relative to the other apps
+    auto: bool = True             # whether the bus auto-loudness gain applies to this app
+
+
+@dataclass
 class AppConfig:
     enabled: bool = True
     selected_device_id: str = ""
@@ -48,6 +55,8 @@ class AppConfig:
     start_minimized: bool = False
     language: str = "en"
     config_version: int = 2       # bump when ControllerParams defaults change
+    mixer_range_db: float = 40.0  # fader range +/- dB
+    apps: dict[str, AppMix] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     @classmethod
@@ -72,6 +81,9 @@ class AppConfig:
                 cfg.params = ControllerParams(**{k: v for k, v in pr.items()
                                                  if k in ControllerParams.__dataclass_fields__})
             # else: older config -> keep the new defaults for params
+            cfg.mixer_range_db = float(raw.get("mixer_range_db", 40.0))
+            for k, v in raw.get("apps", {}).items():
+                cfg.apps[k] = AppMix(**{kk: vv for kk, vv in v.items() if kk in AppMix.__dataclass_fields__})
             for k, v in raw.get("profiles", {}).items():
                 cfg.profiles[k] = DeviceProfile(**{kk: vv for kk, vv in v.items()
                                                    if kk in DeviceProfile.__dataclass_fields__})
@@ -89,8 +101,15 @@ class AppConfig:
             "config_version": self.config_version,
             "params": asdict(self.params),
             "profiles": {k: asdict(v) for k, v in self.profiles.items()},
+            "mixer_range_db": self.mixer_range_db,
+            "apps": {k: asdict(v) for k, v in self.apps.items()},
         }
         self.path().write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def mix_for(self, app_name: str) -> AppMix:
+        if app_name not in self.apps:
+            self.apps[app_name] = AppMix()
+        return self.apps[app_name]
 
     def profile_for(self, device_id: str, device_name: str) -> DeviceProfile:
         if device_id not in self.profiles:

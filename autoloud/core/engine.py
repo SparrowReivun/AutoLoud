@@ -7,6 +7,7 @@ The UI reads an immutable ``EngineState`` snapshot.
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass, field, replace
@@ -58,7 +59,8 @@ class Engine:
         self._applied_session_db: dict[str, float] = {}
         self._applied_master_db: float | None = None
         self._known_active: set[str] = set()
-        self.user_offsets_db: dict[str, float] = {}   # manual per-app offsets (mixer)
+        self._extra_visible_db = 0.0                   # mixer gain the loopback contains
+        self._auto_share_db = 0.0                      # 10*log10(power share of auto apps)
         self.listeners: list[Callable[[EngineState], None]] = []
         self._last_cmd: GainCommand | None = None
 
@@ -129,12 +131,15 @@ class Engine:
         return self.backend.default_output_device() or (devs[0] if devs else None)
 
     def set_enabled(self, on: bool) -> None:
+        """Bus auto-loudness switch. The per-app mixer keeps working either way."""
         self.config.enabled = on
-        if not on:
-            self._restore_volumes()
-        elif self.controller is not None:
+        if on and self.controller is not None:
             self.controller.enter_idle(time.perf_counter())
         self._set_state(enabled=on)
+
+    def mixer_changed(self) -> None:
+        """Called by the UI after a fader / per-app auto switch changed."""
+        self._applied_session_db.clear()   # force a re-apply on the next tick
 
     def apply_profile(self, profile: DeviceProfile) -> None:
         self.profile = profile
@@ -181,6 +186,7 @@ class Engine:
                     if active - self._known_active and self.controller is not None:
                         self.controller.notify_source_change(now)
                     self._known_active = active
+                    self._update_auto_share(sessions)
                     try:
                         master_db = self.backend.get_master_db(self.device)
                     except Exception:
@@ -188,10 +194,12 @@ class Engine:
                     self._set_state(sessions=sessions, master_db=master_db)
 
                 cmd = None
-                if self.controller is not None and self.config.enabled and not self._calibrating:
-                    cmd = self.controller.update(r, now, self.meter)
+                if not self._calibrating:
+                    if self.controller is not None and self.config.enabled:
+                        rr = self._reading_for_auto_apps(r)
+                        cmd = self.controller.update(rr, now, self.meter, self._extra_visible_db)
+                        self._last_cmd = cmd
                     self._apply(cmd, sessions)
-                    self._last_cmd = cmd
                 self._set_state(reading=r, command=cmd, calibrating=self._calibrating,
                                 enabled=self.config.enabled)
             except Exception as e:
@@ -201,22 +209,86 @@ class Engine:
             if dt > 0:
                 time.sleep(dt)
 
-    def _apply(self, cmd: GainCommand, sessions: list[AudioSession]) -> None:
-        # per-session attenuation (+ manual mixer offsets)
+    def _update_auto_share(self, sessions: list[AudioSession]) -> None:
+        """Estimate which share of the mix comes from apps that follow the bus
+        auto gain, from the per-session peak meters (power-weighted, smoothed).
+        Apps with auto switched off are then discounted from the measurement so
+        a loud call with auto off does not drag the bus gain down."""
+        cfg = self.config
+        p_auto = p_all = 0.0
         for s in sessions:
-            if s.is_self:
+            if s.is_self or not s.active:
                 continue
-            db = cmd.session_gain_db + self.user_offsets_db.get(s.name, 0.0)
-            db = min(0.0, db)
+            mix = cfg.apps.get(s.name)
+            pw = float(s.peak) ** 2
+            p_all += pw
+            if mix is None or mix.auto:
+                p_auto += pw
+        if p_all <= 1e-9:
+            target = 0.0
+        else:
+            target = 10.0 * math.log10(max(1e-4, p_auto / p_all))   # <= 0 dB, floor -40
+        # smooth over ~1.5 s (polled every 0.5 s)
+        self._auto_share_db += (target - self._auto_share_db) * 0.3
+
+    def _reading_for_auto_apps(self, r: LoudnessReading) -> LoudnessReading:
+        d = self._auto_share_db
+        if abs(d) < 0.05:
+            return r
+        from dataclasses import replace as _rep
+        m = r.momentary + d
+        return _rep(r, momentary=m, short_term=r.short_term + d, integrated=r.integrated + d,
+                    has_signal=(m > -70.0))
+
+    def _apply(self, cmd: GainCommand | None, sessions: list[AudioSession]) -> None:
+        """Turn (bus auto gain, per-app faders, per-app auto switches) into
+        session volumes (<= 0 dB each) and one master offset (>= 0 dB).
+
+        desired_i = (G if bus auto on and app.auto else 0) + fader_i
+        P         = max(0, max_i desired_i), capped by the master headroom
+        session_i = min(0, desired_i - P);   master = reference + P
+        So a fader above 0 dB is realised by raising the master and pulling
+        the other apps down by the same amount.
+        """
+        G = cmd.total_db if cmd is not None else 0.0
+        cfg = self.config
+        apps = [s for s in sessions if not s.is_self]
+        desired: dict[str, float] = {}
+        for s in apps:
+            mix = cfg.apps.get(s.name)
+            off = mix.offset_db if mix else 0.0
+            auto = mix.auto if mix else True
+            desired[s.key] = (G if (cmd is not None and auto) else 0.0) + off
+        active_desired = [desired[s.key] for s in apps if s.active] or [G]
+        P = max(0.0, max(active_desired))
+        try:
+            lo, hi = self.backend.master_range_db(self.device)
+        except Exception:
+            lo, hi = -65.0, 0.0
+        P = min(P, cfg.params.max_master_boost_db, max(0.0, hi - self.profile.master_ref_db))
+
+        # loopback-visible part of the gain that is NOT the controller's own,
+        # peak-weighted over the active auto apps -> fed back to the controller
+        own_visible = G if self.profile.master_visible_in_loopback else min(0.0, G)
+        wsum = xsum = 0.0
+        for s in apps:
+            mix = cfg.apps.get(s.name)
+            if not s.active or (mix and not mix.auto) or cmd is None:
+                continue
+            applied = min(0.0, desired[s.key] - P) + (P if self.profile.master_visible_in_loopback else 0.0)
+            w = max(1e-3, s.peak)
+            wsum += w; xsum += w * (applied - own_visible)
+        self._extra_visible_db = (xsum / wsum) if wsum > 0 else 0.0
+
+        for s in apps:
+            db = min(0.0, desired[s.key] - P)
             prev = self._applied_session_db.get(s.key)
             if prev is None or abs(prev - db) > 0.05:
                 self.backend.set_session_volume(self.device, s.key, 10 ** (db / 20))
                 self._applied_session_db[s.key] = db
-        # master boost above the calibration reference
-        target_master = self.profile.master_ref_db + cmd.master_offset_db
+        target_master = self.profile.master_ref_db + P
         if self._applied_master_db is None or abs(self._applied_master_db - target_master) > 0.05:
             try:
-                lo, hi = self.backend.master_range_db(self.device)
                 self.backend.set_master_db(self.device, max(lo, min(hi, target_master)))
                 self._applied_master_db = target_master
             except Exception:
