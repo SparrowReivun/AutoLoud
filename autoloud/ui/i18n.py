@@ -8,7 +8,7 @@ _T = {
     "nav.apps": ("应用混音", "Apps"),
     "nav.settings": ("设置", "Settings"),
     "device": ("输出设备", "Output device"),
-    "enable": ("启用自动响度", "Auto loudness"),
+    "enable": ("总线自动响度", "Bus auto loudness"),
     "status.idle": ("待机（无音频）", "Idle (no audio)"),
     "status.onset": ("起始保护中", "Onset guard"),
     "status.steady": ("稳定跟踪", "Steady"),
@@ -75,11 +75,14 @@ _T = {
     "genre": ("音乐风格", "Genre"),
     "track": ("曲目", "Track"),
     "apps.h": ("正在发声的应用", "Applications producing audio"),
-    "apps.hint": ("自动响度对所有应用一视同仁；这里的偏移会叠加在自动增益上（例如把通话 +0 dB、音乐 -6 dB）。\n"
-                  "后续版本将在此基础上实现自动混音。",
-                  "Auto loudness treats every app the same; the offsets here are added on top of the automatic gain "
-                  "(e.g. keep calls at 0 dB, music at -6 dB).\nAutomatic mixing will be built on top of this."),
-    "apps.offset": ("偏移", "Offset"),
+    "apps.hint": ("每个应用一条推子，总线自动响度开关的时候都有效。推子是应用之间的相对音量：推到 0 dB 以上时，程序会抬高主音量并把其它应用压低相同的量来实现。\n"
+                  "「自动」勾选 = 总线的自动增益作用于该应用；取消勾选 = 该应用只按推子固定，不随自动增益变化。",
+                  "One fader per app, active whether the bus auto loudness is on or off. Faders are relative between apps: above 0 dB the master is raised and the other apps are pulled down by the same amount.\n"
+                  "\u201cAuto\u201d ticked = the bus auto gain applies to this app; unticked = the app stays at its fader only."),
+    "apps.fader": ("推子", "Fader"),
+    "apps.auto": ("自动", "Auto"),
+    "apps.auto.tip": ("总线自动响度是否作用于这个应用", "Whether the bus auto loudness applies to this app"),
+    "apps.reset": ("归零", "Reset to 0 dB"),
     "set.ramp": ("渐变时间 (s)", "Ramp time (s)"),
     "set.onset_ramp": ("起始 A→B 渐变 (s)", "Onset A→B ramp (s)"),
     "set.window": ("分析窗口 (s)", "Analysis window (s)"),

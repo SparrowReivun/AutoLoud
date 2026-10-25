@@ -151,10 +151,14 @@ class DashboardPage(QWidget):
 
 # ----------------------------------------------------------------------
 class AppsPage(QWidget):
+    """Per-app mixer: fader (+/- mixer_range_db) + auto-loudness switch per app.
+
+    Always active, whether or not the bus auto-loudness is on.
+    """
     def __init__(self, engine: Engine):
         super().__init__()
         self.engine = engine
-        self.rows: dict[str, tuple[QWidget, QProgressBar, QSlider, QLabel]] = {}
+        self.rows: dict[str, dict] = {}
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
         h = QLabel(t("apps.h")); h.setObjectName("h1"); lay.addWidget(h)
@@ -163,6 +167,8 @@ class AppsPage(QWidget):
         self.inner = QWidget(); self.inner_lay = QVBoxLayout(self.inner); self.inner_lay.addStretch(1)
         self.scroll.setWidget(self.inner)
         lay.addWidget(self.scroll, 1)
+        self._save_timer = QTimer(self); self._save_timer.setSingleShot(True); self._save_timer.setInterval(800)
+        self._save_timer.timeout.connect(self.engine.config.save)
 
     def update_state(self, s: EngineState):
         seen = set()
@@ -172,31 +178,46 @@ class AppsPage(QWidget):
             seen.add(sess.key)
             if sess.key not in self.rows:
                 self._add_row(sess.key, sess.name)
-            w, bar, sl, lbl = self.rows[sess.key]
-            bar.setValue(int(min(1.0, sess.peak) * 100))
-            lbl.setText(f"{sess.name}   ·   vol {sess.volume * 100:.0f}%" + ("" if sess.active else "   (idle)"))
+            row = self.rows[sess.key]
+            row["bar"].setValue(int(min(1.0, sess.peak) * 100))
+            row["lbl"].setText(f"{sess.name}   \u00b7   vol {sess.volume * 100:.0f}%" + ("" if sess.active else "   (idle)"))
         for key in list(self.rows):
             if key not in seen:
-                w = self.rows.pop(key)[0]
+                w = self.rows.pop(key)["card"]
                 w.setParent(None); w.deleteLater()
 
+    def _changed(self, name: str):
+        self.engine.mixer_changed()
+        self._save_timer.start()
+
     def _add_row(self, key, name):
+        cfg = self.engine.config
+        mix = cfg.mix_for(name)
+        rng = int(cfg.mixer_range_db)
         c = Card()
-        lbl = QLabel(name)
+        top = QHBoxLayout()
+        lbl = QLabel(name); top.addWidget(lbl, 1)
+        auto = QCheckBox(t("apps.auto")); auto.setChecked(mix.auto)
+        auto.setToolTip(t("apps.auto.tip"))
+        def auto_changed(on, m=mix, n=name):
+            m.auto = bool(on); self._changed(n)
+        auto.toggled.connect(auto_changed)
+        top.addWidget(auto)
         bar = QProgressBar(); bar.setRange(0, 100); bar.setTextVisible(False); bar.setFixedHeight(8)
         row = QHBoxLayout()
-        row.addWidget(QLabel(t("apps.offset")))
-        sl = QSlider(Qt.Horizontal); sl.setRange(-30, 0)
-        sl.setValue(int(self.engine.user_offsets_db.get(name, 0.0)))
-        val = QLabel(f"{sl.value():+d} dB"); val.setMinimumWidth(50)
-        def changed(v, n=name, l=val):
-            self.engine.user_offsets_db[n] = float(v)
-            l.setText(f"{v:+d} dB")
+        row.addWidget(QLabel(t("apps.fader")))
+        sl = QSlider(Qt.Horizontal); sl.setRange(-rng, rng); sl.setValue(int(round(mix.offset_db)))
+        sl.setTickPosition(QSlider.TicksBelow); sl.setTickInterval(10)
+        val = QLabel(f"{sl.value():+d} dB"); val.setMinimumWidth(56)
+        def changed(v, m=mix, n=name, l=val):
+            m.offset_db = float(v); l.setText(f"{v:+d} dB"); self._changed(n)
         sl.valueChanged.connect(changed)
-        row.addWidget(sl, 1); row.addWidget(val)
-        c.body.addWidget(lbl); c.body.addWidget(bar); c.body.addLayout(row)
+        reset = QPushButton("0 dB"); reset.setFixedWidth(56); reset.setToolTip(t("apps.reset"))
+        reset.clicked.connect(lambda _c, s=sl: s.setValue(0))
+        row.addWidget(sl, 1); row.addWidget(val); row.addWidget(reset)
+        c.body.addLayout(top); c.body.addWidget(bar); c.body.addLayout(row)
         self.inner_lay.insertWidget(self.inner_lay.count() - 1, c)
-        self.rows[key] = (c, bar, sl, lbl)
+        self.rows[key] = {"card": c, "bar": bar, "slider": sl, "lbl": lbl, "auto": auto}
 
 
 # ----------------------------------------------------------------------
@@ -221,7 +242,7 @@ class SettingsPage(QWidget):
             ("first_window_s", "set.first_window", 2, 120, 1),
             ("onset_guard_lufs", "set.guard", -40, 0, 1),
             ("safety_margin_db", "set.safety", 1, 20, 0.5),
-            ("max_master_boost_db", "set.boost", 0, 30, 1),
+            ("max_master_boost_db", "set.boost", 0, 40, 1),
             ("silence_timeout_s", "set.silence", 0.5, 30, 0.5),
             ("source_change_window_s", "set.srcchange", 0, 30, 1),
         ]:

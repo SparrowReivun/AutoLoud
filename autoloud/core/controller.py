@@ -164,12 +164,19 @@ class GainController:
             self._gain_hist.popleft()
 
     # ------------------------------------------------------------------
-    def update(self, r: LoudnessReading, now: float, meter=None) -> GainCommand:
+    def update(self, r: LoudnessReading, now: float, meter=None,
+               extra_visible_db: float = 0.0) -> GainCommand:
         """Advance the controller. ``meter`` (optional) gets its integration
-        reset at window boundaries so the next window starts clean."""
+        reset at window boundaries so the next window starts clean.
+
+        ``extra_visible_db``: gain the loopback already contains that is NOT
+        this controller's own (the per-app mixer faders, peak-weighted). It is
+        subtracted from the measurement like our own gain, so a user who sets
+        music to -6 dB gets music 6 dB quieter instead of the controller
+        cancelling the fader out."""
         p, T = self.params, self.targets
         g_now = self._ramp.value(now)
-        self._record_gain(now, self._visible_gain(g_now))
+        self._record_gain(now, self._visible_gain(g_now) + extra_visible_db)
 
         if r.has_signal:
             self._last_signal_t = now
