@@ -74,7 +74,7 @@ _T = {
     "measured": ("当前测得响度", "Measured loudness"),
     "genre": ("音乐风格", "Genre"),
     "track": ("曲目", "Track"),
-    "apps.h": ("正在发声的应用", "Applications producing audio"),
+    "apps.h": ("应用混音台", "App mixer"),
     "apps.hint": ("每个应用一条推子，总线自动响度开关的时候都有效。推子是应用之间的相对音量：推到 0 dB 以上时，程序会抬高主音量并把其它应用压低相同的量来实现。\n"
                   "「自动」勾选 = 总线的自动增益作用于该应用；取消勾选 = 该应用只按推子固定，不随自动增益变化。",
                   "One fader per app, active whether the bus auto loudness is on or off. Faders are relative between apps: above 0 dB the master is raised and the other apps are pulled down by the same amount.\n"
@@ -83,6 +83,8 @@ _T = {
     "apps.auto": ("自动", "Auto"),
     "apps.auto.tip": ("总线自动响度是否作用于这个应用", "Whether the bus auto loudness applies to this app"),
     "apps.reset": ("归零", "Reset to 0 dB"),
+    "apps.alias.tip": ("给这个应用起个好认的名字（例如把 AMP 改成 Apple Music）", "Give this app a recognisable name (e.g. AMP → Apple Music)"),
+    "apps.idle": ("未发声", "idle"),
     "set.ramp": ("渐变时间 (s)", "Ramp time (s)"),
     "set.onset_ramp": ("起始 A→B 渐变 (s)", "Onset A→B ramp (s)"),
     "set.window": ("分析窗口 (s)", "Analysis window (s)"),

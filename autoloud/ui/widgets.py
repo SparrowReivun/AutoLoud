@@ -73,6 +73,12 @@ class LoudnessBar(QWidget):
         p.end()
 
 
+class NoWheelSlider(QSlider):
+    """QSlider that ignores the mouse wheel (so scrolling a list never moves a fader)."""
+    def wheelEvent(self, ev):
+        ev.ignore()
+
+
 class DbFader(QWidget):
     """A vertical fader in dB (default -60..0) with a numeric readout."""
     valueChanged = Signal(float)

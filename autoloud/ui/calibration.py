@@ -208,7 +208,9 @@ class MusicPage(_PlayPage):
             items.append((f"{t('cal.builtin')} \u00b7 synthetic", ""))
         for sess in self.engine.state.sessions:
             if sess.active and not sess.is_self:
-                items.append((f"{t('cal.app')} \u00b7 {sess.name}", (self.EXTERNAL, sess.key, sess.name)))
+                shown = self.engine.config.display_name(sess.name)
+                label = shown if shown == sess.name else f"{shown} ({sess.name})"
+                items.append((f"{t('cal.app')} \u00b7 {label}", (self.EXTERNAL, sess.key, sess.name)))
         existing = [self.source_box.itemData(i) for i in range(self.source_box.count())]
         if [d for _l, d in items] == existing:
             return
