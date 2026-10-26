@@ -154,9 +154,9 @@ class AppsPage(QWidget):
     """Per-app mixer: fader (+/- mixer_range_db) + auto-loudness switch per app.
 
     Always active, whether or not the bus auto-loudness is on. Rows are
-    ordered: apps producing sound first, loudest (smoothed peak) on top.
+    sorted once each time the page is opened: apps producing sound first,
+    loudest (smoothed peak) on top. No live re-sorting while you look at it.
     """
-    RESORT_S = 1.0
 
     def __init__(self, engine: Engine):
         super().__init__()
@@ -164,7 +164,7 @@ class AppsPage(QWidget):
         self.rows: dict[str, dict] = {}
         self._smooth: dict[str, float] = {}
         self._order: list[str] = []
-        self._last_sort = 0.0
+        self._sort_pending = True
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
         h = QLabel(t("apps.h")); h.setObjectName("h1"); lay.addWidget(h)
@@ -176,8 +176,11 @@ class AppsPage(QWidget):
         self._save_timer = QTimer(self); self._save_timer.setSingleShot(True); self._save_timer.setInterval(800)
         self._save_timer.timeout.connect(self.engine.config.save)
 
+    def showEvent(self, ev):
+        super().showEvent(ev)
+        self._sort_pending = True          # sort once on entering the page
+
     def update_state(self, s: EngineState):
-        import time as _time
         seen = set()
         for sess in s.sessions:
             if sess.is_self:
@@ -187,8 +190,11 @@ class AppsPage(QWidget):
                 self._add_row(sess.key, sess.name)
             row = self.rows[sess.key]
             pk = min(1.0, sess.peak * sess.volume) if sess.active else 0.0
-            sm = self._smooth.get(sess.key, pk)
-            self._smooth[sess.key] = sm + (pk - sm) * 0.3
+            if self._sort_pending:
+                self._smooth[sess.key] = pk        # fresh snapshot for the one-off sort
+            else:
+                sm = self._smooth.get(sess.key, pk)
+                self._smooth[sess.key] = sm + (pk - sm) * 0.3
             row["bar"].setValue(int(min(1.0, sess.peak) * 100))
             row["active"] = sess.active
             row["sub"].setText(f"{sess.name}   \u00b7   vol {sess.volume * 100:.0f}%" +
@@ -198,9 +204,8 @@ class AppsPage(QWidget):
                 w = self.rows.pop(key)["card"]
                 self._smooth.pop(key, None)
                 w.setParent(None); w.deleteLater()
-        now = _time.monotonic()
-        if now - self._last_sort >= self.RESORT_S:
-            self._last_sort = now
+        if self._sort_pending:
+            self._sort_pending = False
             self._resort()
 
     def _resort(self):
@@ -252,7 +257,6 @@ class AppsPage(QWidget):
         c.body.addLayout(top); c.body.addWidget(bar); c.body.addLayout(row)
         self.inner_lay.insertWidget(self.inner_lay.count() - 1, c)
         self.rows[key] = {"card": c, "bar": bar, "slider": sl, "sub": sub, "auto": auto, "active": False}
-        self._order = []   # force a re-sort on the next tick
 
 
 # ----------------------------------------------------------------------
