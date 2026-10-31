@@ -42,7 +42,12 @@ class LoudnessBar(QWidget):
         p.setPen(QColor(theme.MUTED))
         p.setFont(QFont(self.font().family(), 9))
         p.drawText(0, 0, w, 16, Qt.AlignLeft | Qt.AlignVCenter, self.label)
-        txt = f"{self.value:.1f} LUFS" if self.value > self.LO else "—"
+        if self.value <= self.LO:
+            txt = "—"
+        elif "B" in self.markers:                     # dashboard: show the distance to B
+            txt = f"B {self.value - self.markers['B'][0]:+.1f} dB"
+        else:
+            txt = f"{self.value:.1f} LUFS"
         p.drawText(0, 0, w, 16, Qt.AlignRight | Qt.AlignVCenter, txt)
         # groove
         p.setPen(Qt.NoPen)
