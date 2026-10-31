@@ -99,8 +99,9 @@ class AppConfig:
             cfg.language = raw.get("language", "")
             pr = raw.get("params", {})
             if int(raw.get("config_version", 1)) >= cfg.config_version:
+                internal = {"min_session_gain_db"}        # not user-facing: always the code's value
                 cfg.params = ControllerParams(**{k: v for k, v in pr.items()
-                                                 if k in ControllerParams.__dataclass_fields__})
+                                                 if k in ControllerParams.__dataclass_fields__ and k not in internal})
             # else: older config -> keep the new defaults for params
             cfg.mixer_range_db = float(raw.get("mixer_range_db", 40.0))
             for k, v in raw.get("apps", {}).items():

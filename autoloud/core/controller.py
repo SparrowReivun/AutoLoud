@@ -70,7 +70,7 @@ class ControllerParams:
     move_ramp_s: float = 1.8         # ramp of a B-slider move and of a new work's jump to its remembered gain
     first_time_offset_db: float = -3.0   # unknown app's new work starts this much lower
     max_master_boost_db: float = 12.0
-    min_session_gain_db: float = -40.0
+    min_session_gain_db: float = -60.0   # the bottom of the B slider must be (near) silence
     work_silence_s: float = 15.0         # silence: per-app -> the work ended; whole mix -> IDLE (onset guard re-armed)
     work_silence_peak: float = 0.003     # near-silence threshold on the session peak meter (~-50 dBFS)
     tool_window_s: float = 60.0          # an app "active" this long while sounding < tool_max_duty of the time ...
