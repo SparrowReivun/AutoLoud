@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-10-31
 
 - Dashboard "Comfort level B" slider: drag it like a volume knob, the sound follows at once and where it stops is the new B. The music step of the calibration wizard is now optional (B defaults to A + 6 dB until set).
 - Controller rewritten around the listen-then-nudge rules: 5 s listening blocks, +0.5 / −2 dB steps with 2 s ramps, ±0.5 dB dead band, no chasing in steady state (re-adjust only when a 5 s block exceeds B + 5 dB), protection cut by the excess (+1.5 dB hysteresis) at B + 10 dB with an auto-closing notice and a threshold fader, faster recovery up to the pre-cut gain. New works start from the gain the app had last time (remembered per process name). Manual fader moves hold that app until its work ends; moving the Windows master volume re-bases B. Faders now run from mute to +15 dB.
