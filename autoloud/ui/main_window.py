@@ -197,6 +197,12 @@ class AppsPage(QWidget):
                 self._smooth[sess.key] = sm + (pk - sm) * 0.3
             row["bar"].setValue(int(min(1.0, sess.peak) * 100))
             row["active"] = sess.active
+            w = s.works.get(sess.name)
+            if w is None:
+                row["work"].setText("")
+            else:
+                lab = w.label() or t("apps.work_n").format(n=w.index)
+                row["work"].setText(("\u266a " if w.source == "media" else "\u25b6 ") + lab)
             row["sub"].setText(f"{sess.name}   \u00b7   vol {sess.volume * 100:.0f}%" +
                                ("" if sess.active else "   \u00b7   " + t("apps.idle")))
         for key in list(self.rows):
@@ -242,6 +248,7 @@ class AppsPage(QWidget):
             m.auto = bool(on); self._changed(n)
         auto.toggled.connect(auto_changed)
         top.addWidget(auto)
+        work = QLabel(""); work.setObjectName("muted"); work.setToolTip(t("apps.work.tip"))
         bar = QProgressBar(); bar.setRange(0, 100); bar.setTextVisible(False); bar.setFixedHeight(8)
         row = QHBoxLayout()
         row.addWidget(QLabel(t("apps.fader")))
@@ -254,9 +261,9 @@ class AppsPage(QWidget):
         reset = QPushButton("0 dB"); reset.setFixedWidth(56); reset.setToolTip(t("apps.reset"))
         reset.clicked.connect(lambda _c, s=sl: s.setValue(0))
         row.addWidget(sl, 1); row.addWidget(val); row.addWidget(reset)
-        c.body.addLayout(top); c.body.addWidget(bar); c.body.addLayout(row)
+        c.body.addLayout(top); c.body.addWidget(work); c.body.addWidget(bar); c.body.addLayout(row)
         self.inner_lay.insertWidget(self.inner_lay.count() - 1, c)
-        self.rows[key] = {"card": c, "bar": bar, "slider": sl, "sub": sub, "auto": auto, "active": False}
+        self.rows[key] = {"card": c, "bar": bar, "slider": sl, "sub": sub, "auto": auto, "work": work, "active": False}
 
 
 # ----------------------------------------------------------------------
@@ -284,6 +291,7 @@ class SettingsPage(QWidget):
             ("max_master_boost_db", "set.boost", 0, 40, 1),
             ("silence_timeout_s", "set.silence", 0.5, 30, 0.5),
             ("source_change_window_s", "set.srcchange", 0, 30, 1),
+            ("work_silence_s", "set.worksilence", 3, 120, 1),
         ]:
             sp = QDoubleSpinBox(); sp.setRange(lo, hi); sp.setSingleStep(step); sp.setValue(getattr(P, key))
             form.addRow(t(label), sp)

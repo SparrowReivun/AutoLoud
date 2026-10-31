@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Work detection per app: a new song/video is recognised from Windows media-session metadata (title/artist/album change; pause, seek and artwork updates are ignored), or, for apps without metadata, after 15 s of near-silence followed by sound. Each new work in an auto app closes the current analysis window so it gets its own adjustment. The mixer shows the current work (title — artist, or "Work N").
 - Per-app mixer is now a standing feature: ±40 dB faders and a per-app "Auto" switch, working whether the bus auto loudness is on or off. Faders above 0 dB raise the master and attenuate the other apps.
 - Apps with Auto off are discounted from the loudness measurement (peak-meter share estimate) so they do not drag the bus gain.
 - Mixer faders are compensated in the controller so a -6 dB fader really is 6 dB quieter.

@@ -55,6 +55,8 @@ class ControllerParams:
     max_master_boost_db: float = 12.0
     min_session_gain_db: float = -40.0
     source_change_window_s: float = 0.0  # >0: quick re-evaluation N s after a new app starts (0 = off)
+    work_silence_s: float = 15.0         # per-app silence that ends a "work" (fallback rule)
+    work_silence_peak: float = 0.003     # near-silence threshold on the session peak meter (~-50 dBFS)
 
 
 @dataclass
@@ -134,6 +136,16 @@ class GainController:
 
     def retune(self, targets: Targets) -> None:
         self.targets = targets
+
+    def notify_new_work(self, now: float, meter=None) -> None:
+        """A new song / video started in an app that follows the bus gain:
+        close the current analysis window and start a short one, so the new
+        work gets its own adjustment quickly (without the A guard)."""
+        if self.phase == Phase.STEADY:
+            self._window_start_t = now
+            self._window_len = self.params.first_window_s
+            if meter is not None:
+                meter.reset_integration()
 
     # ------------------------------------------------------------------
     def _clamp_total(self, g: float) -> float:

@@ -238,3 +238,12 @@ class MockBackend:
 
     def close(self):
         self.stop_capture()
+
+
+class MockMediaProvider:
+    """Scriptable media metadata for the simulator / tests."""
+    def __init__(self):
+        self.infos = []
+
+    def snapshot(self):
+        return list(self.infos)
