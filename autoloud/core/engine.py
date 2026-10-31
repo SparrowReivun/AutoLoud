@@ -492,7 +492,7 @@ class Engine:
             prev = self._applied_session_db.get(s.key)
             if prev is None or abs(prev - db) > 0.05:
                 # at the floor the session is muted outright (0 %), i.e. -inf dB
-                self.backend.set_session_volume(self.device, s.key, 0.0 if db <= -59.9 else 10 ** (db / 20))
+                self.backend.set_session_volume(self.device, s.key, 0.0 if db <= -119.9 else 10 ** (db / 20))
                 self._applied_session_db[s.key] = db
         target_master = self.profile.master_ref_db + P
         if self._applied_master_db is None or abs(self._applied_master_db - target_master) > 0.05:
