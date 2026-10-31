@@ -187,3 +187,11 @@ def test_b_slider_moves_gain_in_one_ramp_without_protection():
     assert -14.0 < g[7.0] < -5.0, g[7.0]                  # ramping, not a jump
     end = [p for t, p, c in log if t > 12]
     assert abs(np.mean(end) - (-37)) < 1.5, np.mean(end)
+
+
+def test_onset_does_not_boost_a_quiet_intro_into_a_blast():
+    # silence, then a 3 s quiet intro (-45 LUFS), then the real content (-14 LUFS, B+8)
+    src = lambda t: None if t < 1 else (-45.0 if t < 4 else -14.0)
+    log = run_sim(src, 8.0, T())
+    assert max(c.total_db for t, p, c in log) <= 0.0 + 1e-6          # never boosted during the onset
+    assert not any(c.safety_triggered for t, p, c in log)            # so the content does not trip protection

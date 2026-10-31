@@ -285,11 +285,15 @@ class GainController:
 
     # ------------------------------------------------------------------
     def update(self, r: LoudnessReading, now: float, meter=None,
-               extra_visible_db: float = 0.0) -> GainCommand:
+               extra_visible_db: float = 0.0, onset_cap_db: float = 0.0) -> GainCommand:
         """Advance the controller by one tick.
 
         ``extra_visible_db``: gain the loopback already contains that is not
         ours (per-app faders, peak-weighted) so a -6 dB fader stays -6 dB.
+        ``onset_cap_db``: the onset guard never raises the gain above this
+        (the app's remembered gain, or 0 dB if unknown). A quiet intro must
+        not be boosted to B within 2 s only for the real content to blast in;
+        boosting is left to the slow rule 2.
         """
         p, T = self.params, self.targets
         if meter is not None:
@@ -342,7 +346,7 @@ class GainController:
             f = min(1.0, (now - self._onset_t) / max(1e-3, p.onset_ramp_s))
             target_lufs = self.a_lufs + (T.b_lufs - self.a_lufs) * f
             src = self._source_est if r.momentary > ABS_GATE_LUFS else p.onset_guard_lufs
-            self._ramp.retarget(now, self._clamp(target_lufs - src), 0.25)
+            self._ramp.retarget(now, self._clamp(min(target_lufs - src, onset_cap_db)), 0.25)
             if f >= 1.0:
                 self.phase = Phase.ADJUST
                 self._arm_block(now, meter)

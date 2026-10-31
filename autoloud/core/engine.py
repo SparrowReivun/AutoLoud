@@ -246,7 +246,8 @@ class Engine:
                 if not self._calibrating:
                     if self.controller is not None and self.config.enabled:
                         rr = self._reading_for_auto_apps(r)
-                        cmd = self.controller.update(rr, now, self.meter, self._extra_visible_db)
+                        cmd = self.controller.update(rr, now, self.meter, self._extra_visible_db,
+                                                     self._onset_cap_db(sessions))
                         self._last_cmd = cmd
                         if cmd.safety_triggered:
                             self._safety_count += 1
@@ -282,6 +283,14 @@ class Engine:
             if seq > self._ctl_events_seen:
                 self._ctl_events_seen = seq
                 self._events.append((time.time() - (now - t_mono), kind, dict(data)))
+
+    def _onset_cap_db(self, sessions: list[AudioSession]) -> float:
+        """Highest gain the onset guard may ramp to: the remembered gain of the
+        sounding auto app(s) (lowest if several), 0 dB for apps never heard."""
+        known = [self.config.apps[s.name].last_gain_db for s in sessions
+                 if s.active and not s.is_self and self._follows_bus(s.name)
+                 and s.name in self.config.apps and self.config.apps[s.name].last_gain_db is not None]
+        return min(known) if known else 0.0
 
     def _follows_bus(self, app_name: str) -> bool:
         """Does the bus auto gain currently apply to this app?"""
