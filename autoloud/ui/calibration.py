@@ -324,12 +324,18 @@ class MusicPage(_PlayPage):
             self.readout.setText(f"{v:.1f} LUFS")
         self.completeChanged.emit()
 
+    def isComplete(self) -> bool:
+        return True      # step 2 is optional: B can be set with the dashboard slider instead
+
     def validatePage(self):
-        if self.measured is None:
-            return False
-        setattr(self.engine.profile, self.fader_key, (self.fader.db() + 60) / 60)
         self._stop()
         self._release_external()
+        if self.measured is None:
+            # skipped: start B a little above the ceiling A; adjust on the dashboard later
+            self.engine.profile.b_lufs = float(self.engine.profile.a_lufs + 6.0)
+            self.engine.profile.genre = ""
+            return True
+        setattr(self.engine.profile, self.fader_key, (self.fader.db() + 60) / 60)
         self.engine.profile.b_lufs = float(self.measured)
         d = self.source_box.currentData()
         self.engine.profile.genre = d[2] if isinstance(d, tuple) else self.source_box.currentText()

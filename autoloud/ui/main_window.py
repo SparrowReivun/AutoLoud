@@ -69,6 +69,20 @@ class DashboardPage(QWidget):
         srow.addWidget(self.cal_btn)
         lay.addLayout(srow)
 
+        # comfort level B as a knob: where you leave it is the new target
+        bcard = Card()
+        brow = QHBoxLayout()
+        self.b_lbl = QLabel(t("dash.b")); brow.addWidget(self.b_lbl)
+        self.b_slider = NoWheelSlider(Qt.Horizontal); self.b_slider.setRange(-120, 0)   # x0.5 LUFS
+        self.b_slider.setTickPosition(QSlider.TicksBelow); self.b_slider.setTickInterval(20)
+        self.b_slider.valueChanged.connect(self._b_changed)
+        brow.addWidget(self.b_slider, 1)
+        self.b_val = QLabel("—"); self.b_val.setMinimumWidth(110); brow.addWidget(self.b_val)
+        bcard.body.addLayout(brow)
+        bhint = QLabel(t("dash.b.hint")); bhint.setWordWrap(True); bhint.setObjectName("muted")
+        bcard.body.addWidget(bhint)
+        lay.addWidget(bcard)
+
         meters = Card()
         self.m_mom = LoudnessBar(t("meter.momentary"))
         self.m_st = LoudnessBar(t("meter.short"))
@@ -103,6 +117,10 @@ class DashboardPage(QWidget):
         grid.addWidget(c)
         return v
 
+    def _b_changed(self, v):
+        self.engine.set_target_b(v / 2.0)
+        self.b_val.setText(f"{v / 2.0:.1f} LUFS")
+
     def refresh_devices(self):
         self.device_box.blockSignals(True)
         self.device_box.clear()
@@ -120,6 +138,11 @@ class DashboardPage(QWidget):
         self.m_st.set_value(r.short_term)
         self.m_int.set_value(r.integrated)
         p = s.profile
+        if p is not None and not self.b_slider.isSliderDown():
+            v = int(round(p.b_lufs * 2))
+            if v != self.b_slider.value():
+                self.b_slider.blockSignals(True); self.b_slider.setValue(v); self.b_slider.blockSignals(False)
+            self.b_val.setText(f"{p.b_lufs:.1f} LUFS")
         if p is not None and p.calibrated:
             for m in (self.m_mom, self.m_st, self.m_int):
                 m.set_marker("A", p.a_lufs, theme.WARN)

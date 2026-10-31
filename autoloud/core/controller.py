@@ -164,6 +164,17 @@ class GainController:
         self.phase = Phase.ADJUST
         self._arm_block(now + 0.3, meter)
 
+    def shift_target(self, delta_db: float, now: float, meter=None) -> None:
+        """The user moved the comfort level B by ``delta_db`` (dashboard
+        slider): move the gain by the same amount at once so the change is
+        heard immediately, then carry on with the normal rules from there."""
+        if self.phase == Phase.IDLE:
+            self.enter_idle(now)           # re-park with the new A/B
+            return
+        self._ramp.retarget(now, self._clamp(self._ramp.value(now) + delta_db), 0.2)
+        if self.phase in (Phase.ADJUST, Phase.STEADY):
+            self._arm_block(now + 0.2, meter)
+
     def resume_after_safety(self, now: float, meter=None) -> None:
         """The protection notice closed: re-adjust from the current gain."""
         if self.phase == Phase.SAFETY:

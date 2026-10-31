@@ -274,6 +274,21 @@ class Engine:
             self._holds[app_name] = self._last_cmd.total_db
         self.mixer_changed()
 
+    def set_target_b(self, b_lufs: float) -> None:
+        """Dashboard slider: the loudness you set is the new comfort level B."""
+        if self.profile is None:
+            return
+        delta = b_lufs - self.profile.b_lufs
+        if abs(delta) < 0.05:
+            return
+        self.profile.b_lufs = float(b_lufs)
+        self.profile.calibrated = True
+        if self.controller is not None:
+            self.controller.retune(self.profile.targets())
+            self.controller.shift_target(delta, time.perf_counter(), self.meter)
+        self._dirty = True
+        self._set_state(profile=self.profile)
+
     def resume_after_safety(self) -> None:
         """The protection notice closed (or 5 s passed): re-adjust from here."""
         if self.controller is not None:
