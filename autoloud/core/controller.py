@@ -186,25 +186,20 @@ class GainController:
         """The onset floor: a fixed distance below B (no separate calibration)."""
         return self.targets.b_lufs - self.params.onset_below_b_db
 
-    def notify_new_work(self, now: float, meter=None, remembered_gain_db: float | None = None,
-                        alone: bool = True) -> None:
-        """A new song / video started in an app that follows the bus gain.
-
-        ``remembered_gain_db``: the bus gain that app had last time (None if
-        never heard). ``alone``: it is the only app sounding, so the bus gain
-        may jump to that app's remembered value.
+    def notify_new_work(self, now: float, meter=None, remembered_gain_db: float | None = None) -> None:
+        """A new song / video started in an app that follows the bus gain:
+        jump to the gain that app had last time (``remembered_gain_db``; a
+        never-heard app starts a little lower than now). One app at a time
+        is assumed; other apps sounding at the same moment are not considered.
         """
         if self.phase in (Phase.IDLE, Phase.ONSET):
             return                      # the onset guard already handles the start
-        if alone:
-            if remembered_gain_db is not None:
-                self._ramp.retarget(now, self._clamp(remembered_gain_db), self.params.move_ramp_s)
-                self._log(now, "new_work", mode="remembered", gain=self._ramp.end_db)
-            else:
-                self._ramp.retarget(now, self._clamp(self._ramp.value(now) + self.params.first_time_offset_db), self.params.move_ramp_s)
-                self._log(now, "new_work", mode="first", gain=self._ramp.end_db)
+        if remembered_gain_db is not None:
+            self._ramp.retarget(now, self._clamp(remembered_gain_db), self.params.move_ramp_s)
+            self._log(now, "new_work", mode="remembered", gain=self._ramp.end_db)
         else:
-            self._log(now, "new_work", mode="mixed", gain=self._ramp.end_db)
+            self._ramp.retarget(now, self._clamp(self._ramp.value(now) + self.params.first_time_offset_db), self.params.move_ramp_s)
+            self._log(now, "new_work", mode="first", gain=self._ramp.end_db)
         self.phase = Phase.ADJUST
         self._up_streak, self._fresh = 0, True
         self._arm_block(now + self.params.move_ramp_s, meter)

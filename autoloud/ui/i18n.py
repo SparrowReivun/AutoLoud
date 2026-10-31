@@ -54,7 +54,6 @@ _T = {
     "ev.master_moved": ("你动了主音量 {delta:+.1f} dB → 新基准 {ref:.1f} dB，B 随之平移", "You moved the master {delta:+.1f} dB → new reference {ref:.1f} dB, B follows"),
     "ev.mode.remembered": ("沿用该应用上次的增益", "using the app's remembered gain"),
     "ev.mode.first": ("首次见到这个应用，从偏轻起步", "first time for this app, starting a little quiet"),
-    "ev.mode.mixed": ("还有别的应用在响，保持当前增益", "other apps are playing, keeping the current gain"),
     "ev.src.media": ("媒体信息", "media info"),
     "ev.src.silence": ("静音 15 s 规则", "15 s silence rule"),
     "meter.momentary": ("瞬时 (400ms)", "Momentary (400 ms)"),

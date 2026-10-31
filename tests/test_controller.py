@@ -101,12 +101,12 @@ def test_steady_readjusts_when_a_whole_block_is_too_loud():
     assert abs(np.mean(end) - (-22)) < 1.3, np.mean(end)      # settles inside the +-1 dB dead band
 
 
-def test_new_work_uses_remembered_gain_when_alone():
+def test_new_work_uses_remembered_gain():
     def hook(ctl, meter, t):
         if t == 0.0:
             ctl.phase = Phase.STEADY; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
         if t == 5.0:
-            ctl.notify_new_work(t, meter, remembered_gain_db=-6.0, alone=True)
+            ctl.notify_new_work(t, meter, remembered_gain_db=-6.0)
     log = run_sim(lambda t: -22.0 if t < 5 else -16.0, 12.0, T(), hook=hook)
     g6 = [c.total_db for t, p, c in log if 6.1 < t < 6.5][0]
     assert abs(g6 - (-6.0)) < 0.1, g6                      # moved to the remembered gain within move_ramp_s (1 s)

@@ -228,16 +228,16 @@ class Engine:
                         self._holds.pop(app_name, None)        # a manual hold ends with the work
                         if self.controller is not None and self.config.enabled and self._follows_bus(app_name):
                             mix = self.config.mix_for(app_name)
-                            alone = set(auto_active) <= {app_name}
-                            self.controller.notify_new_work(now, self.meter, mix.last_gain_db, alone)
-                    # remember the bus gain an app has while it plays alone (latest value wins,
-                    # so a work that ends before settling still leaves its best estimate)
+                            self.controller.notify_new_work(now, self.meter, mix.last_gain_db)
+                    # remember the bus gain every sounding auto app has (latest value wins, so a
+                    # work that ends before settling still leaves its best estimate)
                     if (self._last_cmd is not None and self._last_cmd.phase.value in ("adjust", "steady")
-                            and len(auto_active) == 1 and self.config.enabled):
-                        mix = self.config.mix_for(auto_active[0])
-                        if mix.last_gain_db is None or abs(mix.last_gain_db - self._last_cmd.total_db) > 0.25:
-                            mix.last_gain_db = round(self._last_cmd.total_db, 2)
-                            self._dirty = True
+                            and self.config.enabled):
+                        for name in auto_active:
+                            mix = self.config.mix_for(name)
+                            if mix.last_gain_db is None or abs(mix.last_gain_db - self._last_cmd.total_db) > 0.25:
+                                mix.last_gain_db = round(self._last_cmd.total_db, 2)
+                                self._dirty = True
                     try:
                         master_db = self.backend.get_master_db(self.device)
                     except Exception:
@@ -295,7 +295,7 @@ class Engine:
         """An app whose session stays active but which actually sounds less
         than ``tool_max_duty`` of the time over ``tool_window_s`` (IME key
         clicks, notification helpers...) gets its mixer Auto switched off, so
-        it neither follows the bus gain nor spoils the "playing alone" test
+        it neither follows the bus gain nor gets a remembered gain of its own
         for the real players. A user who ticks Auto back on wins for good."""
         p = self.config.params
         for s in sessions:

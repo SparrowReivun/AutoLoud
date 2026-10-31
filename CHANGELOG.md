@@ -2,6 +2,7 @@
 
 ## 0.3.0 — 2026-10-31
 
+- New works always jump to the app's remembered gain (or −3 dB for a new app); the "other apps are playing, keep the gain" case is gone — one app at a time is assumed, and the gain is remembered for every sounding auto app.
 - The controller now knows the master volume's real headroom (0 dB full scale minus the calibration reference) and never asks for more boost than that, so it no longer believes a quiet source is at B while the master is pinned at maximum; the dashboard marks the boost "(at the limit)".
 - Settings apply and save as soon as they change (typed values on Enter / focus-out); the Save button is gone.
 - Protection no longer shows a notice: a loud sound is eased down to B + 5 dB within "protection cut takes" (0.3 s, in Settings) and the normal rules resume by themselves once the cut has landed. The loud-sound trigger is one setting edited live from both the dashboard slider and the Settings page.
