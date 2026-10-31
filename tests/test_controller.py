@@ -221,3 +221,30 @@ def test_steady_needs_two_loud_blocks_or_four_quiet_blocks():
     log = run_sim(lambda t: -47.0, 30.0, T(), hook=hook)
     assert all(c.phase == Phase.STEADY for t, p, c in log if t < 19.5)
     assert any(c.phase == Phase.ADJUST for t, p, c in log if t > 20.5)
+
+
+def test_onset_resumes_at_remembered_gain_for_a_known_app():
+    # silence, then a known app (remembered -8 dB) starts: no guard ramp, straight to -8 within move_ramp_s
+    meter_box = {}
+    def run(start):
+        rng = np.random.default_rng(0)
+        meter = StreamingLoudnessMeter(FS, 2, integration_window_s=60)
+        P = ControllerParams(work_silence_s=2.0)
+        ctl = GainController(T(), P)
+        probe = StreamingLoudnessMeter(FS, 2, 1e9); probe.process(rng.standard_normal((FS * 3, 2))); ref = probe.integrated()
+        out = []
+        cmd = None
+        for i in range(int(6.0 * FS / CHUNK)):
+            t = i * CHUNK / FS
+            s = None if t < 1.0 else -14.0
+            g = cmd.total_db if cmd else ctl.gain_db
+            x = np.zeros((CHUNK, 2)) if s is None else rng.standard_normal((CHUNK, 2)) * 10 ** ((s - ref + min(0.0, g)) / 20)
+            cmd = ctl.update(meter.process(x), t, meter, 0.0, min(0.0, start) if start is not None else 0.0, start)
+            out.append((t, cmd))
+        return out
+    known = run(-8.0)
+    g2 = [c.total_db for t, c in known if 2.1 < t < 2.3][0]
+    assert abs(g2 - (-8.0)) < 0.2, g2
+    assert all(c.phase != Phase.ONSET for t, c in known)
+    unknown = run(None)
+    assert any(c.phase == Phase.ONSET for t, c in unknown)

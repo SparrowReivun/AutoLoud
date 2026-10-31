@@ -226,8 +226,9 @@ class Engine:
                             mix = self.config.mix_for(app_name)
                             alone = set(auto_active) <= {app_name}
                             self.controller.notify_new_work(now, self.meter, mix.last_gain_db, alone)
-                    # remember the bus gain an app ends up with when it plays alone
-                    if (self._last_cmd is not None and self._last_cmd.phase.value == "steady"
+                    # remember the bus gain an app has while it plays alone (latest value wins,
+                    # so a work that ends before settling still leaves its best estimate)
+                    if (self._last_cmd is not None and self._last_cmd.phase.value in ("adjust", "steady")
                             and len(auto_active) == 1 and self.config.enabled):
                         mix = self.config.mix_for(auto_active[0])
                         if mix.last_gain_db is None or abs(mix.last_gain_db - self._last_cmd.total_db) > 0.25:
@@ -246,8 +247,9 @@ class Engine:
                 if not self._calibrating:
                     if self.controller is not None and self.config.enabled:
                         rr = self._reading_for_auto_apps(r)
+                        cap, start = self._onset_gains(sessions)
                         cmd = self.controller.update(rr, now, self.meter, self._extra_visible_db,
-                                                     self._onset_cap_db(sessions))
+                                                     cap, start)
                         self._last_cmd = cmd
                         if cmd.safety_triggered:
                             self._safety_count += 1
@@ -284,13 +286,18 @@ class Engine:
                 self._ctl_events_seen = seq
                 self._events.append((time.time() - (now - t_mono), kind, dict(data)))
 
-    def _onset_cap_db(self, sessions: list[AudioSession]) -> float:
-        """Highest gain the onset guard may ramp to: the remembered gain of the
-        sounding auto app(s) (lowest if several), 0 dB for apps never heard."""
-        known = [self.config.apps[s.name].last_gain_db for s in sessions
-                 if s.active and not s.is_self and self._follows_bus(s.name)
-                 and s.name in self.config.apps and self.config.apps[s.name].last_gain_db is not None]
-        return min(known) if known else 0.0
+    def _onset_gains(self, sessions: list[AudioSession]) -> tuple[float, float | None]:
+        """(cap, start) for the onset after silence.
+        cap: highest gain the guard may ramp to = the remembered gain of the
+        sounding auto app(s) (lowest if several), 0 dB for apps never heard.
+        start: the remembered gain to resume at when every sounding auto app
+        is known (None if any is unknown -> the guard ramp runs instead)."""
+        active = [s for s in sessions if s.active and not s.is_self and self._follows_bus(s.name)]
+        known = [self.config.apps[s.name].last_gain_db for s in active
+                 if s.name in self.config.apps and self.config.apps[s.name].last_gain_db is not None]
+        cap = min(known) if known else 0.0
+        start = min(known) if known and len(known) == len(active) else None
+        return cap, start
 
     def _follows_bus(self, app_name: str) -> bool:
         """Does the bus auto gain currently apply to this app?"""
@@ -317,6 +324,9 @@ class Engine:
         if self.controller is not None:
             self.controller.retune(self.profile.targets())
             self.controller.shift_target(delta, time.perf_counter(), self.meter)
+        for mix in self.config.apps.values():          # remembered gains follow B
+            if mix.last_gain_db is not None:
+                mix.last_gain_db = round(mix.last_gain_db + delta, 2)
         self._dirty = True
         self._set_state(profile=self.profile)
 

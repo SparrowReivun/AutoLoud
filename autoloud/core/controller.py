@@ -292,7 +292,8 @@ class GainController:
 
     # ------------------------------------------------------------------
     def update(self, r: LoudnessReading, now: float, meter=None,
-               extra_visible_db: float = 0.0, onset_cap_db: float = 0.0) -> GainCommand:
+               extra_visible_db: float = 0.0, onset_cap_db: float = 0.0,
+               onset_start_db: float | None = None) -> GainCommand:
         """Advance the controller by one tick.
 
         ``extra_visible_db``: gain the loopback already contains that is not
@@ -301,6 +302,10 @@ class GainController:
         (the app's remembered gain, or 0 dB if unknown). A quiet intro must
         not be boosted to B within 2 s only for the real content to blast in;
         boosting is left to the slow rule 2.
+        ``onset_start_db``: the sounding app's remembered gain, if any. Then
+        there is no guard ramp at all: the gain goes to that value (over
+        ``move_ramp_s``) and the normal listen-then-nudge rules take over,
+        with the first decision allowed to cut all the way.
         """
         p, T = self.params, self.targets
         if meter is not None:
@@ -317,9 +322,17 @@ class GainController:
 
         # ---- silence / onset transitions -----------------------------------
         if self.phase == Phase.IDLE and r.has_signal:
-            self.phase = Phase.ONSET
-            self._onset_t = now
-            self._log(now, "onset", a=self.a_lufs, b=T.b_lufs)
+            if onset_start_db is not None:
+                # known app: resume where it left off, no guard ramp
+                self.phase = Phase.ADJUST
+                self._ramp.retarget(now, self._clamp(onset_start_db), p.move_ramp_s)
+                self._up_streak, self._fresh = 0, True
+                self._arm_block(now + p.move_ramp_s, meter)
+                self._log(now, "onset_known", gain=self._ramp.end_db)
+            else:
+                self.phase = Phase.ONSET
+                self._onset_t = now
+                self._log(now, "onset", a=self.a_lufs, b=T.b_lufs)
         elif self.phase != Phase.IDLE and silent_for > p.work_silence_s:
             self.enter_idle(now)
 

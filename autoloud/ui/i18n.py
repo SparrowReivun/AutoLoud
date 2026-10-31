@@ -34,6 +34,7 @@ _T = {
                    "Loudness protection: held at {g:+.1f} dB (was {pre:+.1f} dB), re-adjusts when the notice closes"),
     "act.idle": ("待机：没有声音，增益预置在 {g:+.1f} dB，保证突现的大音量最多只有 B−5 响",
                  "Idle: no sound, gain parked at {g:+.1f} dB so a sudden loud source lands 5 dB under B"),
+    "ev.onset_known": ("有声音了，这个应用上次的增益是 {gain:+.1f} dB → 直接接上，开始听", "Sound started; this app's remembered gain is {gain:+.1f} dB → resuming there, listening"),
     "ev.onset": ("有声音了，起始保护：从 {a:.1f} 升到 B ({b:.1f})", "Sound started, onset guard: {a:.1f} → B ({b:.1f})"),
     "ev.idle": ("安静下来，回到待机，增益预置 {gain:+.1f} dB", "Quiet, back to idle, gain parked at {gain:+.1f} dB"),
     "ev.step": ("听完一段：{block:.1f} LUFS，{error:+.1f} dB → 调 {step:+.1f} dB（{frm:+.1f} → {to:+.1f}，{dur:.0f} s）",
