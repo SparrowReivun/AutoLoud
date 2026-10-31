@@ -122,7 +122,7 @@ _T = {
     "set.stepup": ("首步最多调高 (dB)，连续偏轻时每步递增一倍", "First raise cap (dB); grows 1x, 2x, 3x… on consecutive raises"),
     "set.stepdown": ("每步最多调低 (dB)，新作品首次偏响则一步到位", "Max cut per step (dB); a new work's first cut goes all the way"),
     "set.deadband": ("算作「已舒适」的误差 (±dB)", "Comfortable within (±dB)"),
-    "set.steadytrig": ("稳定后整段 5 秒超过 B 多少才重调 (dB)", "Re-adjust when a 5 s block exceeds B by (dB)"),
+    "set.steadytrig": ("稳定后一整段超过 B 多少才重调 (dB)", "Re-adjust when a whole listening block exceeds B by (dB)"),
     "set.safetyhold": ("保护提示自动关闭 (s)", "Protection notice auto-closes after (s)"),
     "set.safetyland": ("保护触发后压到 B + 多少 (dB)", "Protection cuts down to B + (dB)"),
     "set.onset_below": ("起始保护从 B 以下多少 dB 开始", "Onset guard starts this far below B (dB)"),
