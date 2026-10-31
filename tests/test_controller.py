@@ -231,3 +231,20 @@ def test_near_B_one_exact_step_then_steady():
     assert log[-1][2].phase == Phase.STEADY
     steps = [c for t, p, c in log if c.phase == Phase.ADJUST and t > 13]
     assert not steps            # no creeping after the exact step
+
+
+def test_steady_needs_two_loud_blocks_or_four_quiet_blocks():
+    def hook(ctl, meter, t):
+        if t == 0.0:
+            ctl.phase = Phase.STEADY; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
+    # one loud block (B+8 for 5 s) then back to B: no re-adjust
+    log = run_sim(lambda t: -14.0 if 0.5 < t < 5.5 else -22.0, 20.0, T(), hook=hook)
+    assert all(c.phase == Phase.STEADY for t, p, c in log)
+    # two loud blocks in a row: re-adjust
+    log = run_sim(lambda t: -14.0 if t > 0.5 else -22.0, 20.0, T(), hook=hook)
+    assert any(c.phase == Phase.ADJUST for t, p, c in log if t > 10.5)
+    assert all(c.phase == Phase.STEADY for t, p, c in log if t < 9.5)       # not after the first block
+    # quiet (B-25): three blocks are tolerated, the fourth re-adjusts
+    log = run_sim(lambda t: -47.0, 30.0, T(), hook=hook)
+    assert all(c.phase == Phase.STEADY for t, p, c in log if t < 19.5)
+    assert any(c.phase == Phase.ADJUST for t, p, c in log if t > 20.5)

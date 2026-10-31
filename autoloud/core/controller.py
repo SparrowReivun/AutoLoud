@@ -61,7 +61,10 @@ class ControllerParams:
     step_down_db: float = 2.0        # max cut per step
     deadband_db: float = 1.0         # |error| below this = comfortable
     snap_db: float = 2.0             # |error| below this: one step exactly to B, ignoring the caps
-    steady_trigger_db: float = 5.0   # a 5 s block above B + this restarts adjusting
+    steady_trigger_db: float = 5.0   # steady: blocks above B + this ...
+    steady_over_blocks: int = 2      # ... for this many consecutive blocks restart adjusting
+    steady_under_db: float = -20.0   # steady: blocks below B + this (i.e. B - 20) ...
+    steady_under_blocks: int = 4     # ... for this many consecutive blocks restart adjusting
     safety_margin_db: float = 10.0   # momentary above B + this = protection cut
     safety_land_db: float = 5.0      # ...which cuts the level down to B + this
     safety_ramp_s: float = 0.15      # a fast cut
@@ -134,6 +137,8 @@ class GainController:
         self._last_r: LoudnessReading | None = None
         self._last_extra: float = 0.0
         self._up_streak = 0                 # consecutive "too quiet" steps (raise cap grows with it)
+        self._over_blocks = 0               # steady: consecutive blocks above B + steady_trigger_db
+        self._under_blocks = 0              # steady: consecutive blocks below B + steady_under_db
         self._fresh = False                 # first decision of a new work / onset: a cut goes all the way
         self.steps_taken = 0
         self.events: deque[tuple[int, float, str, dict]] = deque(maxlen=12)   # (seq, now, kind, data)
@@ -367,13 +372,24 @@ class GainController:
             self._tick_block(now)
             if self._block_done(now):
                 block = self._block_perceived(now, r)
-                if block is not None and block > T.b_lufs + p.steady_trigger_db:
+                if block is None:
+                    self._over_blocks = self._under_blocks = 0
+                else:
+                    over = block > T.b_lufs + p.steady_trigger_db
+                    under = block < T.b_lufs + p.steady_under_db
+                    self._over_blocks = self._over_blocks + 1 if over else 0
+                    self._under_blocks = self._under_blocks + 1 if under else 0
+                if block is not None and (self._over_blocks >= p.steady_over_blocks
+                                          or self._under_blocks >= p.steady_under_blocks):
                     self.phase = Phase.ADJUST
-                    self._log(now, "readjust", block=block, over=block - T.b_lufs)
+                    self._log(now, "readjust", block=block, over=block - T.b_lufs,
+                              blocks=self._over_blocks or self._under_blocks)
+                    self._over_blocks = self._under_blocks = 0
                     self._decide(now, r)          # this block counts as the first listen
                 else:
                     if block is not None:
-                        self._log(now, "watch", block=block, error=T.b_lufs - block)
+                        self._log(now, "watch", block=block, error=T.b_lufs - block,
+                                  over_n=self._over_blocks, under_n=self._under_blocks)
                     self._arm_block(now, meter)    # keep watching, do not chase
 
         # SAFETY: hold; the engine calls resume_after_safety() when the notice closes
@@ -408,6 +424,7 @@ class GainController:
         if abs(error) <= p.deadband_db:
             self.phase = Phase.STEADY
             self._up_streak, self._fresh = 0, False
+            self._over_blocks = self._under_blocks = 0
             self._log(now, "steady", block=block, error=error)
             self._arm_block(now, getattr(self, "_meter", None))
             return

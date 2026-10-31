@@ -30,7 +30,7 @@ There are two layers. The first, which exists now, is **automatic loudness**: co
 
 **Getting comfortable: listen, nudge, listen again.** Listen for a full 5 s before deciding. Too quiet: the first raise is at most 0.5 dB, the next 1 dB, then 1.5 dB… growing while it stays too quiet, each over 2 s; the count restarts as soon as it is not. Too loud: lower by at most 2 dB over 2 s, except the first decision after a new work, which cuts all the way. Within 2 dB of B: one exact step to B, no creeping. Within 1 dB of B: stop. After every step, listen another 5 s before the next. Not one pull to the target: careful on the way up, quicker on the way down.
 
-**Once comfortable, stop chasing.** Quiet dialogue, interludes and fade-outs are left to get quieter; a climax may get louder. Only when a whole 5 s block is above B + 5 dB does the adjustment start again, with the same method, until the level is back near B.
+**Once comfortable, stop chasing.** Quiet dialogue, interludes and fade-outs are left to get quieter; a climax may get louder. Only when two consecutive blocks are above B + 5 dB (one loud block does not count), or four consecutive blocks are below B − 20 dB (it really is too quiet), does the adjustment start again, with the same method, until the level is back near B.
 
 **Sudden loudness.** This rule is always active, no 5 s wait. Momentary loudness above B + 10 dB (threshold adjustable on the dashboard, −5 to +25 dB) is cut fast, within 0.15 s, down to B + 5 dB — from the gain actually sounding at that moment — and touched up once the meter has caught up; never straight back to B. The notice stays for 10 s and carries the comfort level B slider. The program hears first and then cuts, so the first instant of a blast cannot be taken back.
 
