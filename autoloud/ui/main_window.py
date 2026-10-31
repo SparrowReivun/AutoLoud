@@ -528,6 +528,9 @@ class MainWindow(QMainWindow):
     def __init__(self, engine: Engine):
         super().__init__()
         self.engine = engine
+        if not engine.config.language:               # first run: follow the system language
+            from autoloud.core.profiles import default_language
+            engine.config.language = default_language()
         set_language(engine.config.language)
         self.setWindowTitle(t("app.title"))
         self.setWindowIcon(make_icon())

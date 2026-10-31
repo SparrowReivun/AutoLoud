@@ -10,15 +10,16 @@ AutoLoud levels every sound on Windows to the comfortable loudness you calibrate
 
 1. Download the latest `AutoLoud.exe` from [Releases](../../releases) (single file, ~100 MB, no Python needed).
 2. Run it. On first launch SmartScreen may warn — choose "More info → Run anyway". The exe is not code-signed.
-3. The calibration wizard opens automatically; it takes about two minutes. AutoLoud then lives in the tray.
+3. The UI follows your Windows display language (Chinese → 中文, otherwise English); change it any time in Settings.
+4. The calibration wizard opens automatically; it takes about two minutes. AutoLoud then lives in the tray.
 
 ## What it does
 
 - **Onset guard**: when sound appears after silence, playback starts 5 dB under your comfort level B and ramps up to B over one block length (5 s by default), only ever cutting, never boosting a quiet intro. A sudden loud notification never blasts you.
-- **Listen, then nudge**: after that, every 5 s of listening leads to one decision: too quiet → up by at most 0.5 dB; too loud → down by at most 2 dB, except a new work's first cut, which goes all the way; within 2 dB of B a step goes exactly to B; each ramped over one block length; within B ± 1 dB it stops.
-- **Comfortable means hands off**: quiet dialogue, interludes and fade-outs are left alone; only 2 consecutive blocks above B + 5 dB, or 4 consecutive blocks below B − 20 dB, restart the adjustment.
+- **Listen, then nudge**: after that, every 5 s of listening leads to one decision: too quiet → up by at most 1 dB; too loud → down by at most 0.8 dB, except a new work's first cut, which goes all the way; within 2 dB of B a step goes exactly to B; each ramped over one block length; within B ± 2 dB it stops.
+- **Comfortable means hands off**: quiet dialogue, interludes and fade-outs are left alone; only 2 consecutive blocks above B + 6 dB, or 3 consecutive blocks below B − 20 dB, restart the adjustment.
 - **New work, same gain**: a track or video change (system media info, or sound after 15 s of silence) resumes at the gain that app had last time, then nudges from there; only apps never heard before go through the onset guard.
-- **Sudden loudness**: momentary loudness above B + 10 dB (adjustable on the dashboard) is cut fast down to B + 5 dB and a notice appears (with a B slider right in it); it closes after 10 s without interaction, then the fine adjustment resumes from there.
+- **Sudden loudness**: momentary loudness above B + 13 dB (adjustable on the dashboard) is cut fast down to B + 5 dB and a notice appears (with a B slider right in it); it closes after 10 s without interaction, then the fine adjustment resumes from there.
 - **Tool apps excluded automatically**: a session that stays active but hardly ever sounds (IME key clicks, notification helpers) gets its Auto switched off, so it neither follows the bus gain nor confuses the detection; tick it back on and it stays.
 - **Per-app mixer**: every app that produces sound gets a fader (mute to +15 dB) and an "Auto" switch, active even when the bus auto loudness is off; a fader above 0 dB is realised by raising the master and pulling the other apps down.
 - **Restores everything**: on exit all app volumes and the master volume return to where they were.

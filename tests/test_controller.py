@@ -13,11 +13,20 @@ FS = 48000
 CHUNK = 480  # 10 ms
 
 
+def TP(**kw):
+    """The tuning the simulations below were written for (the shipped defaults
+    are the author's listening preferences and change more often)."""
+    base = dict(step_up_db=0.5, step_down_db=2.0, deadband_db=1.0, snap_db=2.0,
+                steady_trigger_db=5.0, steady_over_blocks=2, steady_under_db=-20.0, steady_under_blocks=4,
+                safety_margin_db=10.0, safety_land_db=5.0, move_ramp_s=1.0, onset_below_b_db=5.0,
+                work_silence_s=2.0)
+    base.update(kw)
+    return ControllerParams(**base)
+
+
 def run_sim(source_lufs_fn, seconds, targets, params=None, master_visible=False, hook=None):
     targets.master_visible_in_loopback = master_visible
-    params = params or ControllerParams()
-    if params.work_silence_s == 15.0:
-        params.work_silence_s = 2.0        # short silences in the sims
+    params = params or TP()
     rng = np.random.default_rng(0)
     meter = StreamingLoudnessMeter(FS, 2, integration_window_s=60)
     ctl = GainController(targets, params)
@@ -51,7 +60,7 @@ def test_onset_from_silence_is_held_near_A_then_reaches_B():
 
 def test_adjust_steps_are_small_up_and_larger_down():
     # start already in ADJUST at gain 0 (hook), source 4 dB too quiet -> +0.5 dB steps every ~7 s
-    P = ControllerParams()
+    P = TP()
     def hook(ctl, meter, t):
         if t == 0.0:
             ctl.phase = Phase.ADJUST; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
@@ -112,7 +121,7 @@ def test_new_source_during_playback_does_not_restart_from_A():
 
 
 def test_returns_to_idle_and_prearms():
-    P = ControllerParams(onset_guard_lufs=-10)
+    P = TP(onset_guard_lufs=-10)
     log = run_sim(lambda t: -20.0 if t < 3 else None, 7.0, T(), P)
     end = log[-1][2]
     assert end.phase == Phase.IDLE
@@ -121,7 +130,7 @@ def test_returns_to_idle_and_prearms():
 
 def test_boost_no_runaway_with_hidden_master():
     # a quiet source needs +8 dB; with a hidden master the controller must stop at ~+8, not the cap
-    P = ControllerParams(max_master_boost_db=20)
+    P = TP(max_master_boost_db=20)
     def hook(ctl, meter, t):
         if t == 0.0:
             ctl.phase = Phase.ADJUST; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 4.0, 0.0); ctl._arm_block(0.0, meter)
@@ -194,7 +203,7 @@ def test_new_work_too_loud_is_cut_in_one_step():
 
 def test_near_B_one_exact_step_then_steady():
     # 1.8 dB too quiet with a 1 dB first-step cap: snap_db=2 -> one exact +1.8 step, then steady
-    P = ControllerParams(step_up_db=1.0)
+    P = TP(step_up_db=1.0)
     def hook(ctl, meter, t):
         if t == 0.0:
             ctl.phase = Phase.ADJUST; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
@@ -229,7 +238,7 @@ def test_onset_resumes_at_remembered_gain_for_a_known_app():
     def run(start):
         rng = np.random.default_rng(0)
         meter = StreamingLoudnessMeter(FS, 2, integration_window_s=60)
-        P = ControllerParams(work_silence_s=2.0)
+        P = TP(work_silence_s=2.0)
         ctl = GainController(T(), P)
         probe = StreamingLoudnessMeter(FS, 2, 1e9); probe.process(rng.standard_normal((FS * 3, 2))); ref = probe.integrated()
         out = []

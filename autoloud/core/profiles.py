@@ -10,6 +10,20 @@ from pathlib import Path
 from autoloud.core.controller import ControllerParams, Targets
 
 
+def default_language() -> str:
+    """zh when the Windows UI (or POSIX locale) language is Chinese, else en."""
+    try:
+        if sys.platform.startswith("win"):
+            import ctypes
+            lang_id = ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF
+            return "zh" if lang_id == 0x04 else "en"
+    except Exception:
+        pass
+    import locale
+    loc = (locale.getlocale()[0] or os.environ.get("LANG", "")).lower()
+    return "zh" if loc.startswith("zh") else "en"
+
+
 def config_dir() -> Path:
     if sys.platform.startswith("win"):
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
@@ -54,7 +68,7 @@ class AppConfig:
     profiles: dict[str, DeviceProfile] = field(default_factory=dict)
     music_dir: str = ""           # folder with <genre>/*.wav|mp3|flac for calibration
     start_minimized: bool = False
-    language: str = "zh"
+    language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
     mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
@@ -76,7 +90,7 @@ class AppConfig:
             cfg.selected_device_id = raw.get("selected_device_id", "")
             cfg.music_dir = raw.get("music_dir", "")
             cfg.start_minimized = raw.get("start_minimized", False)
-            cfg.language = raw.get("language", "zh")
+            cfg.language = raw.get("language", "")
             pr = raw.get("params", {})
             if int(raw.get("config_version", 1)) >= cfg.config_version:
                 cfg.params = ControllerParams(**{k: v for k, v in pr.items()

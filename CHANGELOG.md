@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Defaults are now the author's tuned values (listen 5 s, +1 / −0.8 dB steps, ±2 dB dead band, steady re-adjust after 2 loud blocks over B + 6 or 3 quiet blocks under B − 20, protection at B + 13 → B + 5, 1.8 s moves).
+- One exe for both languages: on first run the UI follows the Windows display language (Chinese → 中文, otherwise English); switch any time in Settings. The separate English build is no longer needed.
 - Dashboard activity card: what the controller is doing right now (ramp from → to over N s, listening progress, protection hold, idle) and a log of its last decisions, for tuning the rules.
 - Calibration is one step: set external device and master volume to ~80 %, play music you like, raise the fader from 0 to comfortable → B. The harsh-beep "ceiling A" step and all A-related logic are gone; the onset guard now starts a fixed 10 dB below B (adjustable in Settings).
 - Protection: a loud sound is now cut *fast* (0.15 s) down to B + 5 dB (adjustable), measured from the gain actually sounding, and re-corrected once the meter catches up; a cut also overrides a frozen fader hold. The notice stays 10 s, carries the comfort level B slider, and points to the dashboard for the trigger threshold, which now has its own slider there.

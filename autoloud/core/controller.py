@@ -52,22 +52,22 @@ class Phase(str, Enum):
 
 @dataclass
 class ControllerParams:
-    onset_below_b_db: float = 5.0    # the onset floor "A" is this far below B
+    onset_below_b_db: float = 10.0    # the onset floor "A" is this far below B
     onset_guard_lufs: float = -10.0  # assumed loudness of an unknown new source
     listen_s: float = 5.0            # listen this long before each decision; every step and the onset ramp take this long too
-    step_up_db: float = 0.5          # max raise per step
-    step_down_db: float = 2.0        # max cut per step
-    deadband_db: float = 1.0         # |error| below this = comfortable
+    step_up_db: float = 1.0          # max raise per step
+    step_down_db: float = 0.8        # max cut per step
+    deadband_db: float = 2.0         # |error| below this = comfortable
     snap_db: float = 2.0             # |error| below this: one step exactly to B, ignoring the caps
-    steady_trigger_db: float = 5.0   # steady: blocks above B + this ...
+    steady_trigger_db: float = 6.0   # steady: blocks above B + this ...
     steady_over_blocks: int = 2      # ... for this many consecutive blocks restart adjusting
     steady_under_db: float = -20.0   # steady: blocks below B + this (i.e. B - 20) ...
-    steady_under_blocks: int = 4     # ... for this many consecutive blocks restart adjusting
-    safety_margin_db: float = 10.0   # momentary above B + this = protection cut
+    steady_under_blocks: int = 3     # ... for this many consecutive blocks restart adjusting
+    safety_margin_db: float = 13.0   # momentary above B + this = protection cut
     safety_land_db: float = 5.0      # ...which cuts the level down to B + this
     safety_ramp_s: float = 0.15      # a fast cut
     safety_hold_s: float = 10.0      # notice auto-closes after this; engine resumes us
-    move_ramp_s: float = 1.0         # ramp of a B-slider move and of a new work's jump to its remembered gain
+    move_ramp_s: float = 1.8         # ramp of a B-slider move and of a new work's jump to its remembered gain
     first_time_offset_db: float = -3.0   # unknown app's new work starts this much lower
     max_master_boost_db: float = 12.0
     min_session_gain_db: float = -40.0
