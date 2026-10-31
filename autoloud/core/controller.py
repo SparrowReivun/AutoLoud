@@ -64,6 +64,7 @@ class ControllerParams:
     safety_ramp_s: float = 0.3
     safety_hysteresis_db: float = 1.5  # cut the excess plus this, so the level does not sit on the trigger
     safety_hold_s: float = 5.0       # notice auto-closes after this; engine resumes us
+    b_shift_ramp_s: float = 2.0      # B slider: one smooth ramp straight to the needed gain
     silence_timeout_s: float = 2.0   # no signal at all for this long -> IDLE
     first_time_offset_db: float = -3.0   # unknown app's new work starts this much lower
     max_master_boost_db: float = 12.0
@@ -128,6 +129,9 @@ class GainController:
         self._source_est: float = MIN_LUFS
         self._safety_t: float | None = None
         self._pre_safety_gain: float | None = None   # gain before the last protection cut
+        self._safety_guard_until: float = 0.0        # no protection cuts before this (B shift landing)
+        self._last_r: LoudnessReading | None = None
+        self._last_extra: float = 0.0
         self.steps_taken = 0
         self.events: deque[tuple[int, float, str, dict]] = deque(maxlen=12)   # (seq, now, kind, data)
         self._seq = 0
@@ -194,16 +198,41 @@ class GainController:
         self._arm_block(now + 0.3, meter)
 
     def shift_target(self, delta_db: float, now: float, meter=None) -> None:
-        """The user moved the comfort level B by ``delta_db`` (dashboard
-        slider): move the gain by the same amount at once so the change is
-        heard immediately, then carry on with the normal rules from there."""
+        """The user moved the comfort level B (dashboard slider).
+
+        Not a nudge: the gain goes straight to what the new B needs, in one
+        smooth ramp of ``b_shift_ramp_s`` (no 5 s listen, no per-step limit).
+        The needed gain is estimated from the last 3 s of measurement; if
+        nothing is playing the gain simply moves by ``delta_db``. The sudden
+        loudness protection is held off until the ramp has landed and the
+        meter has caught up, so lowering B never pops the notice.
+        """
         if self.phase == Phase.IDLE:
             self.enter_idle(now)           # re-park with the new A/B
             return
-        self._ramp.retarget(now, self._clamp(self._ramp.value(now) + delta_db), 0.2)
-        self._log(now, "b_shift", delta=delta_db, gain=self._ramp.end_db, b=self.targets.b_lufs)
+        p, T = self.params, self.targets
+        g_now = self._ramp.value(now)
+        new_gain = g_now + delta_db
+        est = self._perceived_short_term(now)
+        if self.phase in (Phase.ADJUST, Phase.STEADY) and est is not None:
+            new_gain = g_now + (T.b_lufs - est)        # one step to the needed gain
+        new_gain = self._clamp(new_gain)
+        self._ramp.retarget(now, new_gain, p.b_shift_ramp_s)
+        self._pre_safety_gain = None                   # the user has set a new level
+        self._safety_guard_until = now + p.b_shift_ramp_s + 1.0   # momentary lags ~0.4 s
+        self._log(now, "b_shift", delta=delta_db, gain=new_gain, b=T.b_lufs, dur=p.b_shift_ramp_s)
         if self.phase in (Phase.ADJUST, Phase.STEADY):
-            self._arm_block(now + 0.2, meter)
+            self._arm_block(now + p.b_shift_ramp_s, meter)
+
+    def _perceived_short_term(self, now: float) -> float | None:
+        """Perceived loudness over the last 3 s *as if* the current gain had
+        applied throughout (so a ramp in progress does not skew it)."""
+        r = self._last_r
+        if r is None or r.short_term <= ABS_GATE_LUFS or not r.has_signal:
+            return None
+        g = self._ramp.value(now)
+        return (r.short_term - self._mean_gain(now, 3.0)
+                + self._visible_gain(g) + self._last_extra + self._hidden_gain(g))
 
     def resume_after_safety(self, now: float, meter=None) -> None:
         """The protection notice closed: re-adjust from the current gain."""
@@ -262,6 +291,7 @@ class GainController:
             self._meter = meter
         g_now = self._ramp.value(now)
         self._record_gain(now, self._visible_gain(g_now) + extra_visible_db)
+        self._last_r, self._last_extra = r, extra_visible_db
         safety_now = False
 
         if r.has_signal:
@@ -285,6 +315,7 @@ class GainController:
             excess = perceived_now - (T.b_lufs + p.safety_margin_db)
             settled = self.phase != Phase.SAFETY or (
                 self._ramp.done(now) and now - (self._safety_t or 0.0) > p.safety_ramp_s + 0.5)
+            settled = settled and now >= self._safety_guard_until   # a B shift is still landing
             if excess > 0 and settled:   # momentary lags ~0.4 s: let the cut show before cutting again
                 self._ramp.retarget(now, self._clamp(self._ramp.end_db - excess - p.safety_hysteresis_db),
                                     p.safety_ramp_s)

@@ -428,6 +428,7 @@ class SettingsPage(QWidget):
             ("steady_trigger_db", "set.steadytrig", 1, 15, 0.5),
             ("safety_margin_db", "set.safety", -5, 25, 0.5),
             ("safety_hold_s", "set.safetyhold", 1, 30, 1),
+            ("b_shift_ramp_s", "set.bshift", 0.2, 10, 0.2),
             ("onset_ramp_s", "set.onset_ramp", 0.2, 10, 0.1),
             ("onset_guard_lufs", "set.guard", -40, 0, 1),
             ("max_master_boost_db", "set.boost", 0, 40, 1),

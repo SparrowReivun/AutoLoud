@@ -168,3 +168,20 @@ def test_recovery_after_blast_is_faster_up_to_pre_cut_gain():
     assert min(g) < -3.0                                   # the cut happened
     assert abs(g[-1]) < 0.75, g[-1]                        # and we are back near 0 dB by t=45
     assert abs(log[-1][1] - (-22)) < 1.0
+
+
+def test_b_slider_moves_gain_in_one_ramp_without_protection():
+    # steady at B = -22 with source -22; at t=6 the user drags B down by 15 dB
+    def hook(ctl, meter, t):
+        if t == 0.0:
+            ctl.phase = Phase.STEADY; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
+        if abs(t - 6.0) < 1e-9:
+            ctl.retune(Targets(a_lufs=-47, b_lufs=-37)); ctl.shift_target(-15.0, t, meter)
+    log = run_sim(lambda t: -22.0, 16.0, T(), hook=hook)
+    assert not any(c.safety_triggered for t, p, c in log)
+    assert all(c.phase != Phase.SAFETY for t, p, c in log)
+    g = {round(t, 2): c.total_db for t, p, c in log}
+    assert abs(g[8.5] - (-15.0)) < 1.5, g[8.5]            # landed within ~2.5 s, not 0.5 dB / 7 s
+    assert -14.0 < g[7.0] < -5.0, g[7.0]                  # ramping, not a jump
+    end = [p for t, p, c in log if t > 12]
+    assert abs(np.mean(end) - (-37)) < 1.5, np.mean(end)

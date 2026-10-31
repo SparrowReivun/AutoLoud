@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Dashboard activity card: what the controller is doing right now (ramp from → to over N s, listening progress, protection hold, idle) and a log of its last decisions, for tuning the rules.
+- B slider: moving B now sends the gain straight to what the new B needs in one smooth ramp (2 s, adjustable in Settings) instead of the 5 s listen / 0.5 dB nudges, and the sudden-loudness protection is held off until the move has landed, so lowering B no longer pops the notice.
 
 ## 0.2.0 — 2026-10-31
 
