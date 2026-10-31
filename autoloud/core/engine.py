@@ -39,6 +39,8 @@ class EngineState:
     master_db: float = 0.0
     works: dict[str, WorkInfo] = field(default_factory=dict)   # app name -> current work
     media_available: bool = False
+    safety_active: bool = False      # protection cut in force (notice should be showing)
+    safety_count: int = 0            # increments on every new cut (UI shows the notice on change)
     error: str = ""
 
 
@@ -65,6 +67,8 @@ class Engine:
         self._known_active: set[str] = set()
         self._extra_visible_db = 0.0                   # mixer gain the loopback contains
         self._auto_share_db = 0.0                      # 10*log10(power share of auto apps)
+        self._holds: dict[str, float] = {}             # app -> bus gain frozen by a manual fader move
+        self._safety_count = 0
         self.media = self._make_media_provider()
         self.works = WorkTracker(silence_s=config.params.work_silence_s,
                                  silence_peak=config.params.work_silence_peak,
@@ -122,7 +126,7 @@ class Engine:
             log.exception("capture failed")
             self._set_state(error=f"Capture failed: {e}", running=False)
             return
-        self.meter = StreamingLoudnessMeter(fs, ch, integration_window_s=self.config.params.window_s)
+        self.meter = StreamingLoudnessMeter(fs, ch, integration_window_s=60.0)
         self.controller = GainController(self.profile.targets(), self.config.params)
         self._applied_session_db.clear()
         self._applied_master_db = None
@@ -173,9 +177,6 @@ class Engine:
             self.controller.params = self.config.params
         self.works.silence_s = self.config.params.work_silence_s
         self.works.silence_peak = self.config.params.work_silence_peak
-        if self.meter is not None:
-            self.meter.block_powers = type(self.meter.block_powers)(
-                self.meter.block_powers, maxlen=max(1, int(self.config.params.window_s / 0.1)))
 
     # ------------------------------------------------------------------
     # audio thread
@@ -206,20 +207,30 @@ class Engine:
                     next_poll = now + self.SESSION_POLL_S
                     sessions = self.backend.list_sessions(self.device)
                     active = {s.key for s in sessions if s.active and not s.is_self}
-                    if active - self._known_active and self.controller is not None:
-                        self.controller.notify_source_change(now)
                     self._known_active = active
                     self._update_auto_share(sessions)
+                    auto_active = [s.name for s in sessions if s.active and not s.is_self
+                                   and self._follows_bus(s.name)]
                     for app_name, work in self.works.update(sessions, now):
-                        mix = self.config.apps.get(app_name)
                         log.info("new work in %s: #%d %s (%s)", app_name, work.index,
                                  work.label() or "-", work.source)
-                        if self.controller is not None and self.config.enabled and (mix is None or mix.auto):
-                            self.controller.notify_new_work(now, self.meter)
+                        self._holds.pop(app_name, None)        # a manual hold ends with the work
+                        if self.controller is not None and self.config.enabled and self._follows_bus(app_name):
+                            mix = self.config.mix_for(app_name)
+                            alone = set(auto_active) <= {app_name}
+                            self.controller.notify_new_work(now, self.meter, mix.last_gain_db, alone)
+                    # remember the bus gain an app ends up with when it plays alone
+                    if (self._last_cmd is not None and self._last_cmd.phase.value == "steady"
+                            and len(auto_active) == 1 and self.config.enabled):
+                        mix = self.config.mix_for(auto_active[0])
+                        if mix.last_gain_db is None or abs(mix.last_gain_db - self._last_cmd.total_db) > 0.25:
+                            mix.last_gain_db = round(self._last_cmd.total_db, 2)
+                            self._dirty = True
                     try:
                         master_db = self.backend.get_master_db(self.device)
                     except Exception:
                         master_db = 0.0
+                    self._check_master_moved(master_db)
                     self._set_state(sessions=sessions, master_db=master_db,
                                     works=self.works.all_current(),
                                     media_available=self.media is not None)
@@ -230,9 +241,20 @@ class Engine:
                         rr = self._reading_for_auto_apps(r)
                         cmd = self.controller.update(rr, now, self.meter, self._extra_visible_db)
                         self._last_cmd = cmd
+                        if cmd.safety_triggered:
+                            self._safety_count += 1
+                            log.info("safety cut #%d: perceived %.1f LUFS", self._safety_count, cmd.perceived_lufs)
                     self._apply(cmd, sessions)
+                if getattr(self, "_dirty", False) and now - getattr(self, "_last_save", 0.0) > 5.0:
+                    self._dirty = False; self._last_save = now
+                    try:
+                        self.config.save()
+                    except Exception:
+                        log.exception("config save")
                 self._set_state(reading=r, command=cmd, calibrating=self._calibrating,
-                                enabled=self.config.enabled)
+                                enabled=self.config.enabled,
+                                safety_active=(cmd is not None and cmd.phase.value == "safety"),
+                                safety_count=self._safety_count)
             except Exception as e:
                 log.exception("control loop")
                 self._set_state(error=str(e))
@@ -240,20 +262,55 @@ class Engine:
             if dt > 0:
                 time.sleep(dt)
 
+    def _follows_bus(self, app_name: str) -> bool:
+        """Does the bus auto gain currently apply to this app?"""
+        mix = self.config.apps.get(app_name)
+        return (mix is None or mix.auto) and app_name not in self._holds
+
+    def user_touched_fader(self, app_name: str) -> None:
+        """Rule 7: a manual fader move freezes that app's auto gain until its
+        current work ends."""
+        if self.config.enabled and self._last_cmd is not None and self._follows_bus(app_name):
+            self._holds[app_name] = self._last_cmd.total_db
+        self.mixer_changed()
+
+    def resume_after_safety(self) -> None:
+        """The protection notice closed (or 5 s passed): re-adjust from here."""
+        if self.controller is not None:
+            self.controller.resume_after_safety(time.perf_counter(), self.meter)
+
+    def _check_master_moved(self, master_db: float) -> None:
+        """Rule 7: the user moved the Windows master volume -> that is the new
+        comfort level. Re-base the calibration reference so the controller
+        does not fight it (and does not need to re-learn anything)."""
+        if self._calibrating or self._applied_master_db is None or self.profile is None:
+            return
+        delta = master_db - self._applied_master_db
+        if abs(delta) < 0.5:
+            return
+        p = self.profile
+        p.master_ref_db += delta
+        if p.master_visible_in_loopback:      # loopback moved too: targets move with it
+            p.a_lufs += delta; p.b_lufs += delta
+        self._applied_master_db = master_db
+        if self.controller is not None:
+            self.controller.retune(p.targets())
+        self._dirty = True
+        log.info("master volume moved by user (%+.1f dB): new reference %.1f dB", delta, p.master_ref_db)
+        self._set_state(profile=p)
+
     def _update_auto_share(self, sessions: list[AudioSession]) -> None:
         """Estimate which share of the mix comes from apps that follow the bus
         auto gain, from the per-session peak meters (power-weighted, smoothed).
         Apps with auto switched off are then discounted from the measurement so
         a loud call with auto off does not drag the bus gain down."""
-        cfg = self.config
         p_auto = p_all = 0.0
         for s in sessions:
             if s.is_self or not s.active:
                 continue
-            mix = cfg.apps.get(s.name)
             pw = float(s.peak) ** 2
             p_all += pw
-            if mix is None or mix.auto:
+            if self._follows_bus(s.name):
                 p_auto += pw
         if p_all <= 1e-9:
             target = 0.0
@@ -288,8 +345,11 @@ class Engine:
         for s in apps:
             mix = cfg.apps.get(s.name)
             off = mix.offset_db if mix else 0.0
-            auto = mix.auto if mix else True
-            desired[s.key] = (G if (cmd is not None and auto) else 0.0) + off
+            if s.name in self._holds:
+                base = self._holds[s.name] if cmd is not None else 0.0
+            else:
+                base = G if (cmd is not None and self._follows_bus(s.name)) else 0.0
+            desired[s.key] = base + off
         active_desired = [desired[s.key] for s in apps if s.active] or [G]
         P = max(0.0, max(active_desired))
         try:
@@ -303,8 +363,7 @@ class Engine:
         own_visible = G if self.profile.master_visible_in_loopback else min(0.0, G)
         wsum = xsum = 0.0
         for s in apps:
-            mix = cfg.apps.get(s.name)
-            if not s.active or (mix and not mix.auto) or cmd is None:
+            if not s.active or not self._follows_bus(s.name) or cmd is None:
                 continue
             applied = min(0.0, desired[s.key] - P) + (P if self.profile.master_visible_in_loopback else 0.0)
             w = max(1e-3, s.peak)

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Controller rewritten around the listen-then-nudge rules: 5 s listening blocks, +0.5 / −2 dB steps with 2 s ramps, ±0.5 dB dead band, no chasing in steady state (re-adjust only when a 5 s block exceeds B + 5 dB), protection cut by the excess (+1.5 dB hysteresis) at B + 10 dB with an auto-closing notice and a threshold fader, faster recovery up to the pre-cut gain. New works start from the gain the app had last time (remembered per process name). Manual fader moves hold that app until its work ends; moving the Windows master volume re-bases B. Faders now run from mute to +15 dB.
 - Work detection per app: a new song/video is recognised from Windows media-session metadata (title/artist/album change; pause, seek and artwork updates are ignored), or, for apps without metadata, after 15 s of near-silence followed by sound. Each new work in an auto app closes the current analysis window so it gets its own adjustment. The mixer shows the current work (title — artist, or "Work N").
 - Per-app mixer is now a standing feature: ±40 dB faders and a per-app "Auto" switch, working whether the bus auto loudness is on or off. Faders above 0 dB raise the master and attenuate the other apps.
 - Apps with Auto off are discounted from the loudness measurement (peak-meter share estimate) so they do not drag the bus gain.

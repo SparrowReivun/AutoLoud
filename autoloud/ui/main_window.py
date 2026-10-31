@@ -137,7 +137,8 @@ class DashboardPage(QWidget):
             self.k_master.setText(f"{c.master_offset_db:+.1f} dB")
             self.k_target.setText(f"{c.target_lufs:.1f}")
             self.m_mom.set_marker("T", c.target_lufs, theme.ACCENT)
-            key = {Phase.IDLE: "status.idle", Phase.ONSET: "status.onset", Phase.STEADY: "status.steady"}[c.phase]
+            key = {Phase.IDLE: "status.idle", Phase.ONSET: "status.onset", Phase.ADJUST: "status.adjust",
+                   Phase.STEADY: "status.steady", Phase.SAFETY: "status.safety"}[c.phase]
         else:
             key = "status.calibrating" if s.calibrating else "status.disabled"
             for k in (self.k_total, self.k_session, self.k_master, self.k_target):
@@ -252,11 +253,15 @@ class AppsPage(QWidget):
         bar = QProgressBar(); bar.setRange(0, 100); bar.setTextVisible(False); bar.setFixedHeight(8)
         row = QHBoxLayout()
         row.addWidget(QLabel(t("apps.fader")))
-        sl = NoWheelSlider(Qt.Horizontal); sl.setRange(-rng, rng); sl.setValue(int(round(mix.offset_db)))
-        sl.setTickPosition(QSlider.TicksBelow); sl.setTickInterval(10)
-        val = QLabel(f"{sl.value():+d} dB"); val.setMinimumWidth(56)
+        MUTE = -60   # bottom of the fader = mute
+        sl = NoWheelSlider(Qt.Horizontal); sl.setRange(MUTE, rng)
+        sl.setValue(MUTE if mix.offset_db <= MUTE else int(round(mix.offset_db)))
+        sl.setTickPosition(QSlider.TicksBelow); sl.setTickInterval(5)
+        def fmt(v): return "mute" if v <= MUTE else f"{v:+d} dB"
+        val = QLabel(fmt(sl.value())); val.setMinimumWidth(56)
         def changed(v, m=mix, n=name, l=val):
-            m.offset_db = float(v); l.setText(f"{v:+d} dB"); self._changed(n)
+            m.offset_db = -200.0 if v <= MUTE else float(v); l.setText(fmt(v))
+            self.engine.user_touched_fader(n); self._save_timer.start()
         sl.valueChanged.connect(changed)
         reset = QPushButton("0 dB"); reset.setFixedWidth(56); reset.setToolTip(t("apps.reset"))
         reset.clicked.connect(lambda _c, s=sl: s.setValue(0))
@@ -264,6 +269,58 @@ class AppsPage(QWidget):
         c.body.addLayout(top); c.body.addWidget(work); c.body.addWidget(bar); c.body.addLayout(row)
         self.inner_lay.insertWidget(self.inner_lay.count() - 1, c)
         self.rows[key] = {"card": c, "bar": bar, "slider": sl, "sub": sub, "auto": auto, "work": work, "active": False}
+
+
+# ----------------------------------------------------------------------
+class SafetyNotice(QDialog):
+    """Rule 5: shown when a protection cut happens. Auto-closes after
+    ``safety_hold_s`` unless the user interacts; closing resumes adjustment."""
+
+    def __init__(self, engine: Engine, parent=None):
+        super().__init__(parent, Qt.Tool | Qt.WindowStaysOnTopHint)
+        self.engine = engine
+        self.setWindowTitle("AutoLoud")
+        self.setStyleSheet(theme.QSS)
+        self.setMinimumWidth(420)
+        lay = QVBoxLayout(self)
+        h = QLabel(t("safety.title")); h.setObjectName("h2"); lay.addWidget(h)
+        body = QLabel(t("safety.body")); body.setWordWrap(True); lay.addWidget(body)
+        self.thr_lbl = QLabel(); lay.addWidget(self.thr_lbl)
+        row = QHBoxLayout()
+        self.sl = NoWheelSlider(Qt.Horizontal); self.sl.setRange(-10, 50)   # x0.5 dB
+        self.sl.setValue(int(round(engine.config.params.safety_margin_db * 2)))
+        self.sl.valueChanged.connect(self._thr_changed)
+        row.addWidget(QLabel("-5"), 0); row.addWidget(self.sl, 1); row.addWidget(QLabel("+25 dB"), 0)
+        lay.addLayout(row)
+        self.count_lbl = QLabel(""); self.count_lbl.setObjectName("muted"); lay.addWidget(self.count_lbl)
+        btn = QPushButton(t("safety.close")); btn.setObjectName("primary"); btn.clicked.connect(self.close)
+        lay.addWidget(btn, 0, Qt.AlignRight)
+        self._timer = QTimer(self); self._timer.setSingleShot(True); self._timer.timeout.connect(self.close)
+        self._update_thr()
+
+    def _update_thr(self):
+        p = self.engine.profile; m = self.engine.config.params.safety_margin_db
+        b = p.b_lufs if p else -22.0
+        self.thr_lbl.setText(t("safety.threshold").format(b=b, m=m, v=b + m))
+
+    def _thr_changed(self, v):
+        self._timer.stop()                       # the user is interacting: keep the notice open
+        self.engine.config.params.safety_margin_db = v / 2.0
+        self.engine.apply_params(); self._update_thr(); self.engine.config.save()
+
+    def show_for(self, count: int):
+        self.sl.blockSignals(True)
+        self.sl.setValue(int(round(self.engine.config.params.safety_margin_db * 2)))
+        self.sl.blockSignals(False)
+        self._update_thr()
+        self.count_lbl.setText(t("safety.count").format(n=count))
+        self._timer.start(int(self.engine.config.params.safety_hold_s * 1000))
+        self.show(); self.raise_()
+
+    def closeEvent(self, ev):
+        self._timer.stop()
+        self.engine.resume_after_safety()
+        super().closeEvent(ev)
 
 
 # ----------------------------------------------------------------------
@@ -282,15 +339,17 @@ class SettingsPage(QWidget):
         self.spins = {}
         P = cfg.params
         for key, label, lo, hi, step in [
-            ("ramp_s", "set.ramp", 0.1, 10, 0.1),
+            ("listen_s", "set.listen", 2, 30, 1),
+            ("step_up_db", "set.stepup", 0.1, 6, 0.1),
+            ("step_down_db", "set.stepdown", 0.5, 12, 0.5),
+            ("deadband_db", "set.deadband", 0.1, 3, 0.1),
+            ("steady_trigger_db", "set.steadytrig", 1, 15, 0.5),
+            ("safety_margin_db", "set.safety", -5, 25, 0.5),
+            ("safety_hold_s", "set.safetyhold", 1, 30, 1),
             ("onset_ramp_s", "set.onset_ramp", 0.2, 10, 0.1),
-            ("window_s", "set.window", 5, 900, 5),
-            ("first_window_s", "set.first_window", 2, 120, 1),
             ("onset_guard_lufs", "set.guard", -40, 0, 1),
-            ("safety_margin_db", "set.safety", 1, 20, 0.5),
             ("max_master_boost_db", "set.boost", 0, 40, 1),
             ("silence_timeout_s", "set.silence", 0.5, 30, 0.5),
-            ("source_change_window_s", "set.srcchange", 0, 30, 1),
             ("work_silence_s", "set.worksilence", 3, 120, 1),
         ]:
             sp = QDoubleSpinBox(); sp.setRange(lo, hi); sp.setSingleStep(step); sp.setValue(getattr(P, key))
@@ -374,6 +433,8 @@ class MainWindow(QMainWindow):
         self._ui_timer.timeout.connect(lambda: self._on_state(engine.state))
         self._ui_timer.start()
         self._latest = engine.state
+        self.notice = SafetyNotice(engine, self)
+        self._seen_safety = engine.state.safety_count
 
         # tray
         self.tray = QSystemTrayIcon(make_icon(), self)
@@ -404,6 +465,9 @@ class MainWindow(QMainWindow):
 
     def _on_state(self, s: EngineState):
         self._latest = s
+        if s.safety_count != self._seen_safety:
+            self._seen_safety = s.safety_count
+            self.notice.show_for(s.safety_count)
         if not self.isVisible():
             return
         self.dash.update_state(s)
