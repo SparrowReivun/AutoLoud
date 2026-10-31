@@ -69,6 +69,7 @@ class AppConfig:
     music_dir: str = ""           # folder with <genre>/*.wav|mp3|flac for calibration
     start_minimized: bool = False
     sidebar_collapsed: bool = False
+    startup_master_percent: float = 40.0   # set the Windows master volume to this on start (0 = leave it)
     volume_keys: bool = True      # volume keys / knob adjust B instead of the Windows master volume
     volume_key_step_db: float = 1.0
     language: str = ""            # "" = pick from the Windows UI language on first run
@@ -95,6 +96,7 @@ class AppConfig:
             cfg.start_minimized = raw.get("start_minimized", False)
             cfg.volume_keys = bool(raw.get("volume_keys", True))
             cfg.sidebar_collapsed = bool(raw.get("sidebar_collapsed", False))
+            cfg.startup_master_percent = float(raw.get("startup_master_percent", 40.0))
             cfg.volume_key_step_db = float(raw.get("volume_key_step_db", 1.0))
             cfg.language = raw.get("language", "")
             pr = raw.get("params", {})
@@ -121,6 +123,7 @@ class AppConfig:
             "start_minimized": self.start_minimized,
             "volume_keys": self.volume_keys,
             "sidebar_collapsed": self.sidebar_collapsed,
+            "startup_master_percent": self.startup_master_percent,
             "volume_key_step_db": self.volume_key_step_db,
             "language": self.language,
             "config_version": self.config_version,

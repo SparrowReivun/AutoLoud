@@ -130,6 +130,17 @@ class Engine:
         self.device = device
         self.profile = self.config.profile_for(device.id, device.name)
         self.config.selected_device_id = device.id
+        pct = self.config.startup_master_percent
+        if pct > 0 and not getattr(self, "_startup_master_done", False):
+            # once per launch: park the Windows master at a known position so there is
+            # boost headroom, and make it the calibration reference
+            self._startup_master_done = True
+            try:
+                self.backend.set_master_scalar(device, max(0.0, min(1.0, pct / 100.0)))
+                self.profile.master_ref_db = self.backend.get_master_db(device)
+                log.info("startup: master volume set to %.0f%% (%.1f dB) and taken as the reference", pct, self.profile.master_ref_db)
+            except Exception:
+                log.exception("startup master volume")
         try:
             fs, ch = self.backend.start_capture(device, self._on_audio, block_ms=20)
         except Exception as e:

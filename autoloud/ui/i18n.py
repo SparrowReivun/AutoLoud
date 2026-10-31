@@ -159,6 +159,7 @@ _T = {
     "set.music_dir": ("校准音乐文件夹", "Calibration music folder"),
     "set.browse": ("浏览…", "Browse…"),
     "set.minimized": ("启动时最小化到托盘", "Start minimized to tray"),
+    "set.startup_master": ("启动时把 Windows 主音量设为 (%)，0 = 不动", "Set the Windows master volume on start (%), 0 = leave it"),
     "set.volkeys": ("用音量键 / 音量旋钮调节舒适响度 B（接管 F11/F12 等，不再动 Windows 主音量）", "Volume keys / knob adjust comfort level B (intercepts F11/F12 etc.; the Windows master volume is left alone)"),
     "set.volkeys.step": ("每按一下调多少 (dB)", "Per key press (dB)"),
     "ev.volkey": ("音量键：B {delta:+.1f} dB → {b:.1f} LUFS", "Volume key: B {delta:+.1f} dB → {b:.1f} LUFS"),

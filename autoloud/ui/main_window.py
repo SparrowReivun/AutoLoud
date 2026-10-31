@@ -148,8 +148,8 @@ class DashboardPage(QWidget):
             l = a["listen"]
             key = "act.listen_steady" if a["phase"] == "steady" else "act.listen"
             b = s.profile.b_lufs if s.profile is not None else 0.0
-            now_txt = t(key).format(el=l["elapsed"], tot=l["total"], g=a["gain"], lufs=s.reading.integrated,
-                                    rel=s.reading.integrated - b)
+            blk = s.reading.integrated + self._hidden_db(s)
+            now_txt = t(key).format(el=l["elapsed"], tot=l["total"], g=a["gain"], lufs=blk, rel=blk - b)
             frac = l["elapsed"] / max(1e-3, l["total"])
         elif "listen_in" in a:
             now_txt = t("act.listen_in").format(sec=a["listen_in"], g=a["gain"])
@@ -209,11 +209,21 @@ class DashboardPage(QWidget):
                 self.device_box.setCurrentIndex(i)
         self.device_box.blockSignals(False)
 
+    @staticmethod
+    def _hidden_db(s: EngineState) -> float:
+        """Master boost the loopback cannot see: add it so the meters show what
+        the controller reasons about (and what you hear), not the raw tap."""
+        c, p = s.command, s.profile
+        if c is None or p is None or p.master_visible_in_loopback:
+            return 0.0
+        return max(0.0, c.master_offset_db)
+
     def update_state(self, s: EngineState):
         r = s.reading
-        self.m_mom.set_value(r.momentary)
-        self.m_st.set_value(r.short_term)
-        self.m_int.set_value(r.integrated)
+        hid = self._hidden_db(s)
+        self.m_mom.set_value(r.momentary + hid if r.momentary > -100 else r.momentary)
+        self.m_st.set_value(r.short_term + hid if r.short_term > -100 else r.short_term)
+        self.m_int.set_value(r.integrated + hid if r.integrated > -100 else r.integrated)
         p = s.profile
         if p is not None and not self.b_slider.isSliderDown():
             v = int(round(p.b_lufs * 10))
@@ -431,6 +441,9 @@ class SettingsPage(QWidget):
         form.addRow(t("set.music_dir"), r)
         self.minimized = QCheckBox(); self.minimized.setChecked(cfg.start_minimized)
         form.addRow(t("set.minimized"), self.minimized)
+        self.startup_master = QDoubleSpinBox(); self.startup_master.setRange(0, 100); self.startup_master.setSingleStep(5)
+        self.startup_master.setDecimals(0); self.startup_master.setValue(cfg.startup_master_percent)
+        form.addRow(t("set.startup_master"), self.startup_master)
         self.volkeys = QCheckBox(); self.volkeys.setChecked(cfg.volume_keys)
         form.addRow(t("set.volkeys"), self.volkeys)
         self.volkey_step = QDoubleSpinBox(); self.volkey_step.setRange(0.1, 6); self.volkey_step.setSingleStep(0.1)
@@ -446,6 +459,7 @@ class SettingsPage(QWidget):
         self.music_dir.editingFinished.connect(self._changed)
         self.minimized.toggled.connect(self._changed)
         self.volkeys.toggled.connect(self._changed)
+        self.startup_master.setKeyboardTracking(False); self.startup_master.valueChanged.connect(self._changed)
         self.volkey_step.setKeyboardTracking(False); self.volkey_step.valueChanged.connect(self._changed)
         self.lang.currentTextChanged.connect(self._changed)
         self._save_timer = QTimer(self); self._save_timer.setSingleShot(True); self._save_timer.setInterval(400)
@@ -481,6 +495,7 @@ class SettingsPage(QWidget):
         cfg.music_dir = self.music_dir.text()
         cfg.start_minimized = self.minimized.isChecked()
         cfg.volume_keys = self.volkeys.isChecked()
+        cfg.startup_master_percent = float(self.startup_master.value())
         cfg.volume_key_step_db = float(self.volkey_step.value())
         cfg.language = self.lang.currentText()
         cfg.save()
