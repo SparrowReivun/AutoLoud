@@ -495,10 +495,19 @@ class SettingsPage(QWidget):
         if d:
             self.music_dir.setText(d)
 
+    def showEvent(self, ev):
+        # the dashboard sliders (B, loud-sound trigger) change params too: show the live values
+        P = self.engine.config.params
+        for k, sp in self.spins.items():
+            sp.blockSignals(True); sp.setValue(getattr(P, k)); sp.blockSignals(False)
+        super().showEvent(ev)
+
     def _save(self):
         cfg = self.engine.config
+        from autoloud.core.controller import ControllerParams as _CP
         for k, sp in self.spins.items():
-            setattr(cfg.params, k, float(sp.value()))
+            is_int = _CP.__dataclass_fields__[k].type in ("int", int)
+            setattr(cfg.params, k, int(round(sp.value())) if is_int else float(sp.value()))
         cfg.music_dir = self.music_dir.text()
         cfg.start_minimized = self.minimized.isChecked()
         cfg.language = self.lang.currentText()

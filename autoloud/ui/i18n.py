@@ -146,7 +146,7 @@ _T = {
     "set.window": ("分析窗口 (s)", "Analysis window (s)"),
     "set.first_window": ("起始后首个窗口 (s)", "First window after onset (s)"),
     "set.guard": ("起始保护假设响度 (LUFS)", "Onset guard assumed loudness (LUFS)"),
-    "set.safety": ("安全余量 (dB)", "Safety margin (dB)"),
+    "set.safety": ("音量过大触发阈值：瞬时响度超过 B + 多少就保护 (dB)，与首页滑块是同一项", "Loud-sound trigger: protect when momentary loudness exceeds B + (dB); same as the dashboard slider"),
     "set.boost": ("最大主音量提升 (dB)", "Max master boost (dB)"),
     "set.silence": ("静音判定 (s)", "Silence timeout (s)"),
     "set.srcchange": ("新应用发声后快速重估 (s, 0=关)", "Quick re-estimate after new app (s, 0=off)"),
