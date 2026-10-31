@@ -476,11 +476,9 @@ class SettingsPage(QWidget):
             sp = QDoubleSpinBox(); sp.setRange(lo, hi); sp.setSingleStep(step); sp.setValue(getattr(P, key))
             form.addRow(t(label), sp)
             self.spins[key] = sp
-        # the loud-sound trigger is also a dashboard slider: apply it live, both ways
-        def _thr_live(v):
-            self.engine.config.params.safety_margin_db = float(v)
-            self.engine.apply_params(); self.engine.config.save()
-        self.spins["safety_margin_db"].valueChanged.connect(_thr_live)
+        for sp in self.spins.values():
+            sp.setKeyboardTracking(False)       # typed digits apply on Enter / focus-out, not per keystroke
+            sp.valueChanged.connect(self._changed)
         self.music_dir = QLineEdit(cfg.music_dir)
         browse = QPushButton(t("set.browse"))
         browse.clicked.connect(self._browse)
@@ -496,9 +494,17 @@ class SettingsPage(QWidget):
         self.lang = QComboBox(); self.lang.addItems(["zh", "en"]); self.lang.setCurrentText(cfg.language)
         form.addRow(t("set.lang"), self.lang)
         card.body.addLayout(form)
-        save = QPushButton(t("set.save")); save.setObjectName("primary"); save.clicked.connect(self._save)
-        card.body.addWidget(save, 0, Qt.AlignRight)
+        self.status = QLabel(t("set.autosave")); self.status.setObjectName("muted")
+        card.body.addWidget(self.status, 0, Qt.AlignRight)
         lay.addWidget(card)
+        # every control applies and saves on change (debounced a little for the spin arrows)
+        self.music_dir.editingFinished.connect(self._changed)
+        self.minimized.toggled.connect(self._changed)
+        self.volkeys.toggled.connect(self._changed)
+        self.volkey_step.setKeyboardTracking(False); self.volkey_step.valueChanged.connect(self._changed)
+        self.lang.currentTextChanged.connect(self._changed)
+        self._save_timer = QTimer(self); self._save_timer.setSingleShot(True); self._save_timer.setInterval(400)
+        self._save_timer.timeout.connect(self._save)
         info = QLabel(f"{t('backend')}: {engine.backend.name}   ·   config: {cfg.path()}")
         info.setObjectName("muted"); info.setWordWrap(True)
         lay.addWidget(info)
@@ -507,7 +513,7 @@ class SettingsPage(QWidget):
     def _browse(self):
         d = QFileDialog.getExistingDirectory(self, t("set.music_dir"), self.music_dir.text())
         if d:
-            self.music_dir.setText(d)
+            self.music_dir.setText(d); self._changed()
 
     def showEvent(self, ev):
         # the dashboard sliders (B, loud-sound trigger) change params too: show the live values
@@ -516,8 +522,13 @@ class SettingsPage(QWidget):
             sp.blockSignals(True); sp.setValue(getattr(P, k)); sp.blockSignals(False)
         super().showEvent(ev)
 
+    def _changed(self, *_a):
+        self.status.setText(t("set.saving"))
+        self._save_timer.start()
+
     def _save(self):
         cfg = self.engine.config
+        lang_before = cfg.language
         from autoloud.core.controller import ControllerParams as _CP
         for k, sp in self.spins.items():
             is_int = _CP.__dataclass_fields__[k].type in ("int", int)
@@ -529,6 +540,9 @@ class SettingsPage(QWidget):
         cfg.language = self.lang.currentText()
         cfg.save()
         self.engine.apply_params()
+        import time as _time
+        self.status.setText(t("set.saved").format(when=_time.strftime("%H:%M:%S")) +
+                            (("   " + t("set.lang.restart")) if cfg.language != lang_before else ""))
         self.saved.emit()
 
 
@@ -585,7 +599,6 @@ class MainWindow(QMainWindow):
         engine.listeners.append(self.state_changed.emit)
         self.dash.device_box.currentIndexChanged.connect(self._device_changed)
         self.dash.enable.toggled.connect(self._enable_toggled)
-        self.settings.saved.connect(lambda: QMessageBox.information(self, t("nav.settings"), "OK"))
 
         self._ui_timer = QTimer(self); self._ui_timer.setInterval(100)
         self._ui_timer.timeout.connect(lambda: self._on_state(engine.state))
