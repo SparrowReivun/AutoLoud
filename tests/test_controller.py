@@ -16,7 +16,7 @@ CHUNK = 480  # 10 ms
 def TP(**kw):
     """The tuning the simulations below were written for (the shipped defaults
     are the author's listening preferences and change more often)."""
-    base = dict(step_up_db=0.5, step_down_db=2.0, deadband_db=1.0, snap_db=2.0,
+    base = dict(step_up_db=0.5, step_down_db=2.0, deadband_up_db=1.0, deadband_down_db=1.0, snap_db=2.0,
                 steady_trigger_db=5.0, steady_over_blocks=2, steady_under_db=-20.0, steady_under_blocks=4,
                 safety_margin_db=10.0, safety_land_db=5.0, move_ramp_s=1.0, onset_below_b_db=5.0,
                 work_silence_s=2.0)
@@ -273,3 +273,15 @@ def test_protection_cuts_to_B_plus_land_then_resumes_by_itself():
     assert any(c.phase == Phase.ADJUST for t, p, c in log if trig[0] + 1.0 < t < trig[0] + 3.0)   # resumed by itself
     end = [p for t, p, c in log if t > 50]
     assert abs(np.mean(end) - (-22)) < 2.5, np.mean(end)             # and kept going down towards B
+
+
+def test_asymmetric_dead_band():
+    # +3 / -8: 6 dB too quiet is comfortable, 4 dB too loud is not
+    P = TP(deadband_up_db=3.0, deadband_down_db=8.0)
+    def hook(ctl, meter, t):
+        if t == 0.0:
+            ctl.phase = Phase.ADJUST; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
+    log = run_sim(lambda t: -28.0, 12.0, T(), P, hook=hook)
+    assert log[-1][2].phase == Phase.STEADY and abs(log[-1][2].total_db) < 1e-6
+    log = run_sim(lambda t: -18.0, 12.0, T(), P, hook=hook)
+    assert log[-1][2].total_db < -1.0

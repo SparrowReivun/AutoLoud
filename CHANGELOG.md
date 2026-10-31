@@ -2,6 +2,7 @@
 
 ## 0.3.0 — 2026-10-31
 
+- The "comfortable" dead band is now asymmetric: up to 3 dB above B and up to 8 dB below B (two settings) count as comfortable.
 - New works always jump to the app's remembered gain (or −3 dB for a new app); the "other apps are playing, keep the gain" case is gone — one app at a time is assumed, and the gain is remembered for every sounding auto app.
 - The controller now knows the master volume's real headroom (0 dB full scale minus the calibration reference) and never asks for more boost than that, so it no longer believes a quiet source is at B while the master is pinned at maximum; the dashboard marks the boost "(at the limit)".
 - Settings apply and save as soon as they change (typed values on Enter / focus-out); the Save button is gone.

@@ -57,7 +57,8 @@ class ControllerParams:
     listen_s: float = 5.0            # listen this long before each decision; every step and the onset ramp take this long too
     step_up_db: float = 1.0          # max raise per step
     step_down_db: float = 0.8        # max cut per step
-    deadband_db: float = 2.0         # |error| below this = comfortable
+    deadband_up_db: float = 3.0      # a block up to this much ABOVE B still counts as comfortable
+    deadband_down_db: float = 8.0    # a block up to this much BELOW B still counts as comfortable
     snap_db: float = 3.0             # |error| below this: one step exactly to B, ignoring the caps
     steady_trigger_db: float = 6.0   # steady: blocks above B + this ...
     steady_over_blocks: int = 2      # ... for this many consecutive blocks restart adjusting
@@ -434,7 +435,8 @@ class GainController:
             self._arm_block(now, getattr(self, "_meter", None))
             return
         error = T.b_lufs - block          # >0 too quiet, <0 too loud
-        if abs(error) <= p.deadband_db:
+        comfortable = (-p.deadband_up_db <= error) if error < 0 else (error <= p.deadband_down_db)
+        if comfortable:
             self.phase = Phase.STEADY
             self._up_streak, self._fresh = 0, False
             self._over_blocks = self._under_blocks = 0
