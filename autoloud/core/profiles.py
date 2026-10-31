@@ -68,6 +68,8 @@ class AppConfig:
     profiles: dict[str, DeviceProfile] = field(default_factory=dict)
     music_dir: str = ""           # folder with <genre>/*.wav|mp3|flac for calibration
     start_minimized: bool = False
+    volume_keys: bool = True      # volume keys / knob adjust B instead of the Windows master volume
+    volume_key_step_db: float = 1.0
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
     mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
@@ -90,6 +92,8 @@ class AppConfig:
             cfg.selected_device_id = raw.get("selected_device_id", "")
             cfg.music_dir = raw.get("music_dir", "")
             cfg.start_minimized = raw.get("start_minimized", False)
+            cfg.volume_keys = bool(raw.get("volume_keys", True))
+            cfg.volume_key_step_db = float(raw.get("volume_key_step_db", 1.0))
             cfg.language = raw.get("language", "")
             pr = raw.get("params", {})
             if int(raw.get("config_version", 1)) >= cfg.config_version:
@@ -112,6 +116,8 @@ class AppConfig:
             "selected_device_id": self.selected_device_id,
             "music_dir": self.music_dir,
             "start_minimized": self.start_minimized,
+            "volume_keys": self.volume_keys,
+            "volume_key_step_db": self.volume_key_step_db,
             "language": self.language,
             "config_version": self.config_version,
             "params": asdict(self.params),

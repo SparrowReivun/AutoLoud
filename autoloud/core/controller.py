@@ -58,7 +58,7 @@ class ControllerParams:
     step_up_db: float = 1.0          # max raise per step
     step_down_db: float = 0.8        # max cut per step
     deadband_db: float = 2.0         # |error| below this = comfortable
-    snap_db: float = 2.0             # |error| below this: one step exactly to B, ignoring the caps
+    snap_db: float = 3.0             # |error| below this: one step exactly to B, ignoring the caps
     steady_trigger_db: float = 6.0   # steady: blocks above B + this ...
     steady_over_blocks: int = 2      # ... for this many consecutive blocks restart adjusting
     steady_under_db: float = -20.0   # steady: blocks below B + this (i.e. B - 20) ...

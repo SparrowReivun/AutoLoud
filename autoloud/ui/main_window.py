@@ -73,8 +73,9 @@ class DashboardPage(QWidget):
         bcard = Card()
         brow = QHBoxLayout()
         self.b_lbl = QLabel(t("dash.b")); brow.addWidget(self.b_lbl)
-        self.b_slider = NoWheelSlider(Qt.Horizontal); self.b_slider.setRange(-120, 0)   # x0.5 LUFS
-        self.b_slider.setTickPosition(QSlider.TicksBelow); self.b_slider.setTickInterval(20)
+        self.b_slider = NoWheelSlider(Qt.Horizontal); self.b_slider.setRange(-600, 0)   # x0.1 LUFS
+        self.b_slider.setTickPosition(QSlider.TicksBelow); self.b_slider.setTickInterval(100)
+        self.b_slider.setSingleStep(1); self.b_slider.setPageStep(10)
         self.b_slider.valueChanged.connect(self._b_changed)
         brow.addWidget(self.b_slider, 1)
         self.b_val = QLabel("—"); self.b_val.setMinimumWidth(110); brow.addWidget(self.b_val)
@@ -187,8 +188,8 @@ class DashboardPage(QWidget):
         return v
 
     def _b_changed(self, v):
-        self.engine.set_target_b(v / 2.0)
-        self.b_val.setText(f"{v / 2.0:.1f} LUFS")
+        self.engine.set_target_b(v / 10.0)
+        self.b_val.setText(f"{v / 10.0:.1f} LUFS")
 
     def _thr_changed(self, v):
         self.engine.config.params.safety_margin_db = v / 2.0
@@ -218,7 +219,7 @@ class DashboardPage(QWidget):
         self.m_int.set_value(r.integrated)
         p = s.profile
         if p is not None and not self.b_slider.isSliderDown():
-            v = int(round(p.b_lufs * 2))
+            v = int(round(p.b_lufs * 10))
             if v != self.b_slider.value():
                 self.b_slider.blockSignals(True); self.b_slider.setValue(v); self.b_slider.blockSignals(False)
             self.b_val.setText(f"{p.b_lufs:.1f} LUFS")
@@ -399,7 +400,8 @@ class SafetyNotice(QDialog):
         self.thr_lbl = QLabel(); self.thr_lbl.setObjectName("muted"); self.thr_lbl.setWordWrap(True); lay.addWidget(self.thr_lbl)
         row = QHBoxLayout()
         row.addWidget(QLabel(t("dash.b")), 0)
-        self.sl = NoWheelSlider(Qt.Horizontal); self.sl.setRange(-120, 0)   # x0.5 LUFS, same as the dashboard
+        self.sl = NoWheelSlider(Qt.Horizontal); self.sl.setRange(-600, 0)   # x0.1 LUFS, same as the dashboard
+        self.sl.setSingleStep(1); self.sl.setPageStep(10)
         self.sl.valueChanged.connect(self._b_changed)
         row.addWidget(self.sl, 1)
         self.b_val = QLabel("—"); self.b_val.setMinimumWidth(90); row.addWidget(self.b_val, 0)
@@ -418,15 +420,15 @@ class SafetyNotice(QDialog):
 
     def _b_changed(self, v):
         self._timer.stop()                       # the user is interacting: keep the notice open
-        self.engine.set_target_b(v / 2.0)
-        self.b_val.setText(f"{v / 2.0:.1f} LUFS")
+        self.engine.set_target_b(v / 10.0)
+        self.b_val.setText(f"{v / 10.0:.1f} LUFS")
         self._update_thr()
 
     def show_for(self, count: int):
         p = self.engine.profile
         if p is not None:
             self.sl.blockSignals(True)
-            self.sl.setValue(int(round(p.b_lufs * 2)))
+            self.sl.setValue(int(round(p.b_lufs * 10)))
             self.sl.blockSignals(False)
             self.b_val.setText(f"{p.b_lufs:.1f} LUFS")
         self._update_thr()
@@ -484,6 +486,11 @@ class SettingsPage(QWidget):
         form.addRow(t("set.music_dir"), r)
         self.minimized = QCheckBox(); self.minimized.setChecked(cfg.start_minimized)
         form.addRow(t("set.minimized"), self.minimized)
+        self.volkeys = QCheckBox(); self.volkeys.setChecked(cfg.volume_keys)
+        form.addRow(t("set.volkeys"), self.volkeys)
+        self.volkey_step = QDoubleSpinBox(); self.volkey_step.setRange(0.1, 6); self.volkey_step.setSingleStep(0.1)
+        self.volkey_step.setValue(cfg.volume_key_step_db)
+        form.addRow(t("set.volkeys.step"), self.volkey_step)
         self.lang = QComboBox(); self.lang.addItems(["zh", "en"]); self.lang.setCurrentText(cfg.language)
         form.addRow(t("set.lang"), self.lang)
         card.body.addLayout(form)
@@ -515,6 +522,8 @@ class SettingsPage(QWidget):
             setattr(cfg.params, k, int(round(sp.value())) if is_int else float(sp.value()))
         cfg.music_dir = self.music_dir.text()
         cfg.start_minimized = self.minimized.isChecked()
+        cfg.volume_keys = self.volkeys.isChecked()
+        cfg.volume_key_step_db = float(self.volkey_step.value())
         cfg.language = self.lang.currentText()
         cfg.save()
         self.engine.apply_params()

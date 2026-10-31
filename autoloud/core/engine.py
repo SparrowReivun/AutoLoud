@@ -365,6 +365,13 @@ class Engine:
         self._dirty = True
         self._set_state(profile=self.profile)
 
+    def nudge_b(self, delta_db: float) -> None:
+        """Volume keys / knob: move the comfort level B by ``delta_db``."""
+        if self.profile is None:
+            return
+        self.set_target_b(max(-60.0, min(0.0, self.profile.b_lufs + delta_db)))
+        self._event("volkey", delta=delta_db, b=self.profile.b_lufs)
+
     def resume_after_safety(self) -> None:
         """The protection notice closed (or 5 s passed): re-adjust from here."""
         if self.controller is not None:

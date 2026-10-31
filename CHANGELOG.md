@@ -2,6 +2,9 @@
 
 ## 0.3.0 — 2026-10-31
 
+- Volume keys and volume knobs (F11/F12-style media keys, USB/Bluetooth knobs) now move the comfort level B by 1 dB per press instead of the Windows master volume (Settings: on by default, step adjustable; mute is left to Windows; keys pressed while an admin window is in front still go to Windows).
+- Comfort level B sliders (dashboard and protection notice) now move in 0.1 LUFS steps.
+- One-step-to-B range default is 3 dB (must be larger than the ±2 dB dead band to matter).
 - Defaults are now the author's tuned values (listen 5 s, +1 / −0.8 dB steps, ±2 dB dead band, steady re-adjust after 2 loud blocks over B + 6 or 3 quiet blocks under B − 20, protection at B + 13 → B + 5, 1.8 s moves).
 - One exe for both languages: on first run the UI follows the Windows display language (Chinese → 中文, otherwise English); switch any time in Settings. The separate English build is no longer needed.
 - Dashboard activity card: what the controller is doing right now (ramp from → to over N s, listening progress, protection hold, idle) and a log of its last decisions, for tuning the rules.

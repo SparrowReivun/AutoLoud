@@ -22,6 +22,7 @@ AutoLoud levels every sound on Windows to the comfortable loudness you calibrate
 - **Sudden loudness**: momentary loudness above B + 13 dB (adjustable on the dashboard) is cut fast down to B + 5 dB and a notice appears (with a B slider right in it); it closes after 10 s without interaction, then the fine adjustment resumes from there.
 - **Tool apps excluded automatically**: a session that stays active but hardly ever sounds (IME key clicks, notification helpers) gets its Auto switched off, so it neither follows the bus gain nor confuses the detection; tick it back on and it stays.
 - **Per-app mixer**: every app that produces sound gets a fader (mute to +15 dB) and an "Auto" switch, active even when the bus auto loudness is off; a fader above 0 dB is realised by raising the master and pulling the other apps down.
+- **Volume keys move B**: keyboard volume keys and external volume knobs adjust the comfort level B (1 dB per press) instead of the Windows master volume; can be turned off in Settings.
 - **Restores everything**: on exit all app volumes and the master volume return to where they were.
 
 ## Calibration

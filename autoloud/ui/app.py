@@ -64,6 +64,10 @@ def main(argv=None) -> int:
     from autoloud.ui.main_window import MainWindow
     win = MainWindow(engine)
     win.start()
+    # volume keys / knob move B instead of the Windows master volume (Windows only)
+    from autoloud.backends.volumekeys_windows import VolumeKeys
+    volkeys = VolumeKeys(lambda d: engine.nudge_b(d * cfg.volume_key_step_db), lambda: cfg.volume_keys)
+    volkeys.start()
     if not cfg.start_minimized:
         win.show()
     # CI smoke test hook: exit cleanly after N seconds
@@ -72,6 +76,7 @@ def main(argv=None) -> int:
         from PySide6.QtCore import QTimer
         QTimer.singleShot(int(float(exit_after) * 1000), win.quit)
     rc = app.exec()
+    volkeys.stop()
     engine.stop()
     try:
         backend.close()
