@@ -59,7 +59,8 @@ class ControllerParams:
     listen_s: float = 5.0            # listen this long before each decision
     step_up_db: float = 0.5          # max raise of the 1st step; the n-th consecutive raise may be n x this
     step_down_db: float = 2.0        # max cut per step
-    deadband_db: float = 0.5         # |error| below this = comfortable
+    deadband_db: float = 1.0         # |error| below this = comfortable
+    snap_db: float = 2.0             # |error| below this: one step exactly to B, ignoring the caps
     steady_trigger_db: float = 5.0   # a 5 s block above B + this restarts adjusting
     safety_margin_db: float = 10.0   # momentary above B + this = protection cut
     safety_land_db: float = 5.0      # ...which cuts the level down to B + this
@@ -411,7 +412,11 @@ class GainController:
             self._arm_block(now, getattr(self, "_meter", None))
             return
         g = self._ramp.end_db
-        if error > 0:
+        if abs(error) <= p.snap_db:
+            # close to B: finish in one exact step instead of creeping around it
+            self._up_streak = 0
+            step = error
+        elif error > 0:
             # too quiet: 1x, 2x, 3x ... step_up_db on consecutive raises
             self._up_streak += 1
             up = p.step_up_db * self._up_streak

@@ -87,7 +87,7 @@ def test_steady_readjusts_when_a_whole_block_is_too_loud():
     log = run_sim(lambda t: -22.0 if t < 5 else -15.0, 40.0, T(), hook=hook)   # +7 dB > trigger 5
     assert any(c.phase == Phase.ADJUST for t, p, c in log if t > 10)
     end = [p for t, p, c in log if t > 35]
-    assert abs(np.mean(end) - (-22)) < 1.0, np.mean(end)
+    assert abs(np.mean(end) - (-22)) < 1.3, np.mean(end)      # settles inside the ±1 dB dead band
 
 
 def test_safety_cuts_only_the_excess_and_holds():
@@ -217,3 +217,17 @@ def test_new_work_too_loud_is_cut_in_one_step_then_raises_escalate():
     log = run_sim(lambda t: -13.0, 12.0, T(), hook=hook2)
     g = [c.total_db for t, p, c in log if t > 8]
     assert min(g) >= -2.1, min(g)
+
+
+def test_near_B_one_exact_step_then_steady():
+    # 1.8 dB too quiet with a 1 dB first-step cap: snap_db=2 -> one exact +1.8 step, then steady
+    P = ControllerParams(step_up_db=1.0)
+    def hook(ctl, meter, t):
+        if t == 0.0:
+            ctl.phase = Phase.ADJUST; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
+    log = run_sim(lambda t: -23.8, 20.0, T(), P, hook=hook)
+    g = [c.total_db for t, p, c in log]
+    assert abs(max(g) - 1.8) < 0.4, max(g)
+    assert log[-1][2].phase == Phase.STEADY
+    steps = [c for t, p, c in log if c.phase == Phase.ADJUST and t > 13]
+    assert not steps            # no creeping after the exact step

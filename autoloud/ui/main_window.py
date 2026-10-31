@@ -455,6 +455,7 @@ class SettingsPage(QWidget):
             ("step_up_db", "set.stepup", 0.1, 6, 0.1),
             ("step_down_db", "set.stepdown", 0.5, 12, 0.5),
             ("deadband_db", "set.deadband", 0.1, 3, 0.1),
+            ("snap_db", "set.snap", 0.5, 6, 0.5),
             ("steady_trigger_db", "set.steadytrig", 1, 15, 0.5),
             ("safety_margin_db", "set.safety", -5, 25, 0.5),
             ("safety_land_db", "set.safetyland", 0, 15, 0.5),
