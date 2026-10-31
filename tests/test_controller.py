@@ -57,12 +57,12 @@ def test_adjust_steps_are_small_up_and_larger_down():
             ctl.phase = Phase.ADJUST; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
     log = run_sim(lambda t: -26.0, 55.0, T(), P, hook=hook)
     gains = [c.total_db for t, p, c in log]
-    # raises escalate 0.5, 1.0, 1.5, then the remaining 1.0: 4 dB reached in ~4 steps (10 s each), never beyond
-    assert 3.5 <= max(gains) <= 4.3, max(gains)
+    # raises are 0.5 dB each (10 s cycle): 2.5 dB after 55 s, then the snap finishes the last 2 dB in one step
+    assert 2.0 <= max(gains) <= 4.3, max(gains)
     g12 = max(c.total_db for t, p, c in log if t < 20.5)
-    assert g12 <= 1.6, g12                                # first two steps: 0.5 + 1.0
+    assert g12 <= 1.1, g12                                # first two steps: 0.5 + 0.5
     steps = [abs(b - a) for a, b in zip(gains, gains[1:])]
-    assert max(steps) < 1.5 * 0.01 / 5 * 1.5 + 1e-6      # largest single ramp 1.5 dB over 5 s
+    assert max(steps) < 2.0 * 0.01 / 5 * 1.5 + 1e-6      # largest single ramp <= 2 dB (the snap) over 5 s
     # too loud by 6 dB -> -2 dB steps, settles inside the +-1 dB dead band within ~35 s
     log = run_sim(lambda t: -16.0, 45.0, T(), P, hook=hook)
     end = [p for t, p, c in log if t > 40]
@@ -173,7 +173,7 @@ def test_onset_does_not_boost_a_quiet_intro_into_a_blast():
     assert not any(c.safety_triggered for t, p, c in log)            # so the content does not trip protection
 
 
-def test_new_work_too_loud_is_cut_in_one_step_then_raises_escalate():
+def test_new_work_too_loud_is_cut_in_one_step():
     # ADJUST fresh (as after a new work), source 9 dB too loud -> one full -9 dB step
     def hook(ctl, meter, t):
         if t == 0.0:

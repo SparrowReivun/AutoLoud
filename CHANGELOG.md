@@ -11,7 +11,7 @@
 - Steady state leaves only after 2 consecutive blocks above B + trigger, or 4 consecutive blocks below B − 20 dB (all four numbers in Settings); one loud block alone no longer re-adjusts.
 - Dashboard meters read as the distance to B ("B +1.3 dB") once calibrated.
 - Settling: within 2 dB of B (adjustable) a step goes exactly to B instead of creeping by the step caps, and the dead band is now ±1 dB (was ±0.5).
-- Nudges: consecutive raises escalate (1x, 2x, 3x… the step cap) so a quiet work is reached in seconds rather than minutes; the first decision after a new work or onset cuts all the way if too loud. Onset floor is now B − 5 dB.
+- Nudges: the first decision after a new work or onset cuts all the way if too loud; raises stay capped at the step size (the escalating 1x/2x/3x raise was tried and dropped). Onset floor is now B − 5 dB.
 - Onset guard no longer boosts: during the 2 s onset the gain is capped at the app's remembered gain (0 dB for an unknown app), so a quiet intro is not pulled up to B only for the real content to blast in and trip the protection; boosting is left to the slow nudges.
 - B slider: moving B now sends the gain straight to what the new B needs in one smooth ramp (2 s, adjustable in Settings) instead of the 5 s listen / 0.5 dB nudges, and the sudden-loudness protection is held off until the move has landed, so lowering B no longer pops the notice.
 

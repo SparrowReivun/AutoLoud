@@ -55,7 +55,7 @@ class ControllerParams:
     onset_below_b_db: float = 5.0    # the onset floor "A" is this far below B
     onset_guard_lufs: float = -10.0  # assumed loudness of an unknown new source
     listen_s: float = 5.0            # listen this long before each decision; every step and the onset ramp take this long too
-    step_up_db: float = 0.5          # max raise of the 1st step; the n-th consecutive raise may be n x this
+    step_up_db: float = 0.5          # max raise per step
     step_down_db: float = 2.0        # max cut per step
     deadband_db: float = 1.0         # |error| below this = comfortable
     snap_db: float = 2.0             # |error| below this: one step exactly to B, ignoring the caps
@@ -444,9 +444,7 @@ class GainController:
             self._up_streak = 0
             step = error
         elif error > 0:
-            # too quiet: 1x, 2x, 3x ... step_up_db on consecutive raises
-            self._up_streak += 1
-            up = p.step_up_db * self._up_streak
+            up = p.step_up_db
             pre = self._pre_safety_gain
             if pre is not None and g < pre:            # recovering from a protection cut
                 up = max(up, min(p.step_down_db, pre - g))

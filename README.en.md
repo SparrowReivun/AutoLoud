@@ -15,7 +15,7 @@ AutoLoud levels every sound on Windows to the comfortable loudness you calibrate
 ## What it does
 
 - **Onset guard**: when sound appears after silence, playback starts 5 dB under your comfort level B and ramps up to B over one block length (5 s by default), only ever cutting, never boosting a quiet intro. A sudden loud notification never blasts you.
-- **Listen, then nudge**: after that, every 5 s of listening leads to one decision: too quiet → up, with the cap growing on consecutive raises (0.5, 1, 1.5 dB…); too loud → down by at most 2 dB, except a new work's first cut, which goes all the way; within 2 dB of B a step goes exactly to B; each ramped over one block length; within B ± 1 dB it stops.
+- **Listen, then nudge**: after that, every 5 s of listening leads to one decision: too quiet → up by at most 0.5 dB; too loud → down by at most 2 dB, except a new work's first cut, which goes all the way; within 2 dB of B a step goes exactly to B; each ramped over one block length; within B ± 1 dB it stops.
 - **Comfortable means hands off**: quiet dialogue, interludes and fade-outs are left alone; only 2 consecutive blocks above B + 5 dB, or 4 consecutive blocks below B − 20 dB, restart the adjustment.
 - **New work, same gain**: a track or video change (system media info, or sound after 15 s of silence) resumes at the gain that app had last time, then nudges from there; only apps never heard before go through the onset guard.
 - **Sudden loudness**: momentary loudness above B + 10 dB (adjustable on the dashboard) is cut fast down to B + 5 dB and a notice appears (with a B slider right in it); it closes after 10 s without interaction, then the fine adjustment resumes from there.

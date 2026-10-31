@@ -120,7 +120,7 @@ _T = {
     "apps.work.tip": ("♪ 来自系统媒体信息（标题/作者）；▶ 按「静音 15 秒后再发声」计数", "♪ from system media info (title/artist); ▶ counted by the 15 s-silence rule"),
     "set.worksilence": ("静音判定 (s)：应用静音这么久算作品结束；全部静音这么久进入待机", "Silence (s): an app silent this long ends its work; everything silent this long → idle"),
     "set.listen": ("步长 (s)：每段听多久，每步渐变和起始保护也用这个时间", "Block length (s): listen time, and the ramp time of every step and of the onset guard"),
-    "set.stepup": ("首步最多调高 (dB)，连续偏轻时每步递增一倍", "First raise cap (dB); grows 1x, 2x, 3x… on consecutive raises"),
+    "set.stepup": ("每步最多调高 (dB)", "Max raise per step (dB)"),
     "set.stepdown": ("每步最多调低 (dB)，新作品首次偏响则一步到位", "Max cut per step (dB); a new work's first cut goes all the way"),
     "set.deadband": ("算作「已舒适」的误差 (±dB)", "Comfortable within (±dB)"),
     "set.snap": ("离 B 不到多少 dB 时一步直接到位 (dB)", "Within this of B: one exact step (dB)"),
