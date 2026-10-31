@@ -384,7 +384,8 @@ class Engine:
         """Volume keys / knob: move the comfort level B by ``delta_db``."""
         if self.profile is None:
             return
-        self.set_target_b(max(-60.0, min(0.0, self.profile.b_lufs + delta_db)))
+        self.set_target_b(max(-45.0, min(0.0, self.profile.b_lufs + delta_db)))
+        log.info("volume key: B %+.1f dB -> %.1f LUFS", delta_db, self.profile.b_lufs)
         self._event("volkey", delta=delta_db, b=self.profile.b_lufs)
 
     def resume_after_safety(self) -> None:

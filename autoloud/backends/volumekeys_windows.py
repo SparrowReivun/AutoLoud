@@ -45,6 +45,8 @@ class VolumeKeys:
         self._tid = 0
         self._hook = None
         self._proc = None          # keep the CFUNCTYPE object alive
+        self._last_step = 0.0      # rate limit: knobs / held keys can fire dozens of events a second
+        self.min_interval_s = 0.12
 
     @staticmethod
     def available() -> bool:
@@ -80,10 +82,14 @@ class VolumeKeys:
                 kb = ctypes.cast(l_param, ctypes.POINTER(_KBDLLHOOKSTRUCT)).contents
                 if kb.vkCode in (VK_VOLUME_UP, VK_VOLUME_DOWN):
                     if w_param in (WM_KEYDOWN, WM_SYSKEYDOWN):
-                        try:
-                            self.on_step(+1 if kb.vkCode == VK_VOLUME_UP else -1)
-                        except Exception:
-                            log.exception("volume key handler")
+                        import time as _t
+                        now = _t.monotonic()
+                        if now - self._last_step >= self.min_interval_s:
+                            self._last_step = now
+                            try:
+                                self.on_step(+1 if kb.vkCode == VK_VOLUME_UP else -1)
+                            except Exception:
+                                log.exception("volume key handler")
                     return 1                      # swallow both down and up: Windows never sees it
             return user32.CallNextHookEx(self._hook, n_code, w_param, l_param)
 
