@@ -4,6 +4,8 @@
 
 AutoLoud levels every sound on Windows to the comfortable loudness you calibrated. No driver, no audio-stream interception: it measures how loud the system output is in real time (ITU-R BS.1770 LUFS) and quietly adjusts each application's volume so the result lands on your target.
 
+![AutoLoud dashboard](assets/screenshot-dashboard.png)
+
 ## Install
 
 1. Download the latest `AutoLoud.exe` from [Releases](../../releases) (single file, ~100 MB, no Python needed).
@@ -13,8 +15,10 @@ AutoLoud levels every sound on Windows to the comfortable loudness you calibrate
 ## What it does
 
 - **Onset guard**: when sound appears after silence, playback starts at your ceiling A and ramps to your comfort level B over 2 s. A sudden loud notification never blasts you.
-- **Window tracking**: every 30 s the gain is recomputed from that window's integrated loudness with a 2 s ramp, keeping the dynamics inside music and films intact.
-- **Safety limiter**: momentary loudness above B + 8 dB (an ad cut into the window) is pulled down in 0.3 s.
+- **Listen, then nudge**: after that, every 5 s of listening leads to one decision: too quiet → up by at most 0.5 dB, too loud → down by at most 2 dB, each over 2 s; within B ± 0.5 dB it stops.
+- **Comfortable means hands off**: quiet dialogue, interludes and fade-outs are left alone; only a whole 5 s block above B + 5 dB restarts the adjustment.
+- **New work, fresh start**: a track or video change (system media info, or sound after 15 s of silence) starts from the gain that app had last time, then nudges from there.
+- **Sudden loudness**: momentary loudness above B + 10 dB (adjustable) is cut by the excess within 0.3 s and a notice appears; it closes after 5 s without interaction, then the fine adjustment resumes from there.
 - **Per-app mixer**: every app that produces sound gets a ±40 dB fader and an "Auto" switch, active even when the bus auto loudness is off; a fader above 0 dB is realised by raising the master and pulling the other apps down.
 - **Restores everything**: on exit all app volumes and the master volume return to where they were.
 

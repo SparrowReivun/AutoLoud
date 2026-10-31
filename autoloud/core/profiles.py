@@ -44,6 +44,7 @@ class AppMix:
     offset_db: float = 0.0        # user fader, -40..+40 dB, relative to the other apps
     auto: bool = True             # whether the bus auto-loudness gain applies to this app
     alias: str = ""               # user label (e.g. "Apple Music" for AMP)
+    last_gain_db: float | None = None   # bus gain this app ended up with last time (rule 1)
 
 
 @dataclass
@@ -55,8 +56,8 @@ class AppConfig:
     music_dir: str = ""           # folder with <genre>/*.wav|mp3|flac for calibration
     start_minimized: bool = False
     language: str = "zh"
-    config_version: int = 2       # bump when ControllerParams defaults change
-    mixer_range_db: float = 40.0  # fader range +/- dB
+    config_version: int = 3       # bump when ControllerParams defaults change
+    mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
