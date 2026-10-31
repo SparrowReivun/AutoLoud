@@ -466,7 +466,7 @@ class SettingsPage(QWidget):
             ("steady_under_blocks", "set.steadyunder_n", 1, 20, 1),
             ("safety_margin_db", "set.safety", -5, 25, 0.5),
             ("safety_land_db", "set.safetyland", 0, 15, 0.5),
-            ("safety_hold_s", "set.safetyhold", 1, 30, 1),
+            ("safety_ramp_s", "set.safetyramp", 0.05, 3, 0.05),
             ("onset_below_b_db", "set.onset_below", 0, 30, 1),
             ("move_ramp_s", "set.moveramp", 0.2, 10, 0.2),
             ("onset_guard_lufs", "set.guard", -40, 0, 1),
@@ -476,6 +476,11 @@ class SettingsPage(QWidget):
             sp = QDoubleSpinBox(); sp.setRange(lo, hi); sp.setSingleStep(step); sp.setValue(getattr(P, key))
             form.addRow(t(label), sp)
             self.spins[key] = sp
+        # the loud-sound trigger is also a dashboard slider: apply it live, both ways
+        def _thr_live(v):
+            self.engine.config.params.safety_margin_db = float(v)
+            self.engine.apply_params(); self.engine.config.save()
+        self.spins["safety_margin_db"].valueChanged.connect(_thr_live)
         self.music_dir = QLineEdit(cfg.music_dir)
         browse = QPushButton(t("set.browse"))
         browse.clicked.connect(self._browse)
@@ -586,8 +591,6 @@ class MainWindow(QMainWindow):
         self._ui_timer.timeout.connect(lambda: self._on_state(engine.state))
         self._ui_timer.start()
         self._latest = engine.state
-        self.notice = SafetyNotice(engine, self)
-        self._seen_safety = engine.state.safety_count
 
         # tray
         self.tray = QSystemTrayIcon(make_icon(), self)
@@ -644,9 +647,6 @@ class MainWindow(QMainWindow):
 
     def _on_state(self, s: EngineState):
         self._latest = s
-        if s.safety_count != self._seen_safety:
-            self._seen_safety = s.safety_count
-            self.notice.show_for(s.safety_count)
         if not self.isVisible():
             return
         self.dash.update_state(s)

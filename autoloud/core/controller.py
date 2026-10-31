@@ -65,8 +65,7 @@ class ControllerParams:
     steady_under_blocks: int = 3     # ... for this many consecutive blocks restart adjusting
     safety_margin_db: float = 13.0   # momentary above B + this = protection cut
     safety_land_db: float = 5.0      # ...which cuts the level down to B + this
-    safety_ramp_s: float = 0.15      # a fast cut
-    safety_hold_s: float = 10.0      # notice auto-closes after this; engine resumes us
+    safety_ramp_s: float = 0.3       # the cut's ramp time (fast but not a click)
     move_ramp_s: float = 1.8         # ramp of a B-slider move and of a new work's jump to its remembered gain
     first_time_offset_db: float = -3.0   # unknown app's new work starts this much lower
     max_master_boost_db: float = 12.0
@@ -404,7 +403,11 @@ class GainController:
                                   over_n=self._over_blocks, under_n=self._under_blocks)
                     self._arm_block(now, meter)    # keep watching, do not chase
 
-        # SAFETY: hold; the engine calls resume_after_safety() when the notice closes
+        elif self.phase == Phase.SAFETY:
+            # the cut has landed and the meter has caught up without a further cut:
+            # back to the normal rules from here (no notice, no waiting)
+            if self._ramp.done(now) and now - (self._safety_t or 0.0) > p.safety_ramp_s + 0.7:
+                self.resume_after_safety(now, meter)
 
         total = self._ramp.value(now)
         return GainCommand(

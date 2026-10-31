@@ -257,3 +257,19 @@ def test_onset_resumes_at_remembered_gain_for_a_known_app():
     assert all(c.phase != Phase.ONSET for t, c in known)
     unknown = run(None)
     assert any(c.phase == Phase.ONSET for t, c in unknown)
+
+
+def test_protection_cuts_to_B_plus_land_then_resumes_by_itself():
+    # steady at B, then the source jumps to B+13: cut to ~B+5 within safety_ramp_s,
+    # no notice: the normal rules resume on their own and walk the rest down
+    def hook(ctl, meter, t):
+        if t == 0.0:
+            ctl.phase = Phase.STEADY; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
+    log = run_sim(lambda t: -22.0 if t < 3 else -9.0, 60.0, T(), hook=hook)
+    trig = [t for t, p, c in log if c.safety_triggered]
+    assert trig and 3.0 < trig[0] < 3.6, trig
+    landed = [t for t, p, c in log if t > trig[0] and c.total_db < -6.5]
+    assert landed and landed[0] - trig[0] < 1.2, landed[:1]          # ~B+5 quickly
+    assert any(c.phase == Phase.ADJUST for t, p, c in log if trig[0] + 1.0 < t < trig[0] + 3.0)   # resumed by itself
+    end = [p for t, p, c in log if t > 50]
+    assert abs(np.mean(end) - (-22)) < 2.5, np.mean(end)             # and kept going down towards B
