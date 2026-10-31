@@ -6,6 +6,8 @@ _T = {
     "nav.dashboard": ("总览", "Dashboard"),
     "nav.calibrate": ("校准", "Calibrate"),
     "nav.apps": ("应用混音", "Apps"),
+    "nav.collapse": ("收起侧边栏", "Collapse sidebar"),
+    "nav.expand": ("展开侧边栏", "Expand sidebar"),
     "nav.settings": ("设置", "Settings"),
     "device": ("输出设备", "Output device"),
     "enable": ("总线自动响度", "Bus auto loudness"),

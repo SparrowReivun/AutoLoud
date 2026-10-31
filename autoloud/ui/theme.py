@@ -23,6 +23,9 @@ QPushButton#primary {{ background: {ACCENT}; color: #0b1220; border: none; font-
 QPushButton#primary:hover {{ background: #6fb5ff; }}
 QPushButton#navbtn {{ text-align: left; padding: 10px 16px; border: none; border-radius: 8px; background: transparent; }}
 QPushButton#navbtn:checked {{ background: {PANEL2}; color: {ACCENT}; }}
+QPushButton#navbtn[compact="true"] {{ text-align: center; padding: 10px 0; font-size: 16px; }}
+QPushButton#navtoggle {{ border: none; border-radius: 8px; background: transparent; color: {MUTED}; font-size: 18px; padding: 0; }}
+QPushButton#navtoggle:hover {{ background: {PANEL2}; color: {TEXT}; }}
 QFrame#card {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 10px; }}
 QLabel#h1 {{ font-size: 20px; font-weight: 600; }}
 QLabel#h2 {{ font-size: 15px; font-weight: 600; }}

@@ -68,6 +68,7 @@ class AppConfig:
     profiles: dict[str, DeviceProfile] = field(default_factory=dict)
     music_dir: str = ""           # folder with <genre>/*.wav|mp3|flac for calibration
     start_minimized: bool = False
+    sidebar_collapsed: bool = False
     volume_keys: bool = True      # volume keys / knob adjust B instead of the Windows master volume
     volume_key_step_db: float = 1.0
     language: str = ""            # "" = pick from the Windows UI language on first run
@@ -93,6 +94,7 @@ class AppConfig:
             cfg.music_dir = raw.get("music_dir", "")
             cfg.start_minimized = raw.get("start_minimized", False)
             cfg.volume_keys = bool(raw.get("volume_keys", True))
+            cfg.sidebar_collapsed = bool(raw.get("sidebar_collapsed", False))
             cfg.volume_key_step_db = float(raw.get("volume_key_step_db", 1.0))
             cfg.language = raw.get("language", "")
             pr = raw.get("params", {})
@@ -117,6 +119,7 @@ class AppConfig:
             "music_dir": self.music_dir,
             "start_minimized": self.start_minimized,
             "volume_keys": self.volume_keys,
+            "sidebar_collapsed": self.sidebar_collapsed,
             "volume_key_step_db": self.volume_key_step_db,
             "language": self.language,
             "config_version": self.config_version,

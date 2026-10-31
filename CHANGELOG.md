@@ -2,6 +2,7 @@
 
 ## 0.3.0 — 2026-10-31
 
+- Collapsible sidebar: the ‹ button folds the navigation to icons; the state is remembered.
 - Volume keys and volume knobs (F11/F12-style media keys, USB/Bluetooth knobs) now move the comfort level B by 1 dB per press instead of the Windows master volume (Settings: on by default, step adjustable; mute is left to Windows; keys pressed while an admin window is in front still go to Windows).
 - Comfort level B sliders (dashboard and protection notice) now move in 0.1 LUFS steps.
 - One-step-to-B range default is 3 dB (must be larger than the ±2 dB dead band to matter).

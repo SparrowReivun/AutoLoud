@@ -545,24 +545,34 @@ class MainWindow(QMainWindow):
 
         root = QWidget(); self.setCentralWidget(root)
         hl = QHBoxLayout(root); hl.setContentsMargins(0, 0, 0, 0); hl.setSpacing(0)
-        nav = QWidget(); nav.setObjectName("nav"); nav.setFixedWidth(180)
-        nl = QVBoxLayout(nav); nl.setContentsMargins(12, 16, 12, 16); nl.setSpacing(4)
-        brand = QLabel("AutoLoud"); brand.setObjectName("h1"); nl.addWidget(brand)
+        self.NAV_W, self.NAV_W_MIN = 180, 56
+        nav = QWidget(); nav.setObjectName("nav"); self.nav = nav
+        nl = QVBoxLayout(nav); nl.setContentsMargins(8, 12, 8, 12); nl.setSpacing(4)
+        head = QHBoxLayout(); head.setSpacing(4)
+        self.brand = QLabel("AutoLoud"); self.brand.setObjectName("h1"); head.addWidget(self.brand, 1)
+        self.collapse_btn = QPushButton("\u2039"); self.collapse_btn.setObjectName("navtoggle")
+        self.collapse_btn.setFixedSize(32, 32); self.collapse_btn.setToolTip(t("nav.collapse"))
+        self.collapse_btn.clicked.connect(self.toggle_sidebar)
+        head.addWidget(self.collapse_btn, 0, Qt.AlignTop)
+        nl.addLayout(head)
         nl.addSpacing(10)
         self.stack = QStackedWidget()
         self.dash = DashboardPage(engine, self.run_calibration)
         self.apps = AppsPage(engine)
         self.settings = SettingsPage(engine)
         self.nav_btns = []
-        for i, (key, page) in enumerate([("nav.dashboard", self.dash), ("nav.apps", self.apps),
-                                         ("nav.settings", self.settings)]):
-            b = QPushButton(t(key)); b.setObjectName("navbtn"); b.setCheckable(True)
+        self._nav_items = [("nav.dashboard", "\u25c9", self.dash), ("nav.apps", "\u2630", self.apps),
+                           ("nav.settings", "\u2699", self.settings)]
+        for i, (key, icon, page) in enumerate(self._nav_items):
+            b = QPushButton(f"{icon}   {t(key)}"); b.setObjectName("navbtn"); b.setCheckable(True)
             b.clicked.connect(lambda _c, i=i: self._go(i))
             nl.addWidget(b); self.nav_btns.append(b); self.stack.addWidget(page)
         nl.addStretch(1)
         self.backend_lbl = QLabel(engine.backend.name); self.backend_lbl.setObjectName("muted")
         nl.addWidget(self.backend_lbl)
         hl.addWidget(nav); hl.addWidget(self.stack, 1)
+        self._nav_anim = None
+        self._set_sidebar(engine.config.sidebar_collapsed, animate=False)
         self._go(0)
 
         # engine → UI (thread-safe via signal)
@@ -599,6 +609,32 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(i)
         for j, b in enumerate(self.nav_btns):
             b.setChecked(i == j)
+
+    # ---- collapsible sidebar ----------------------------------------------
+    def toggle_sidebar(self):
+        self._set_sidebar(not self.engine.config.sidebar_collapsed)
+        self.engine.config.save()
+
+    def _set_sidebar(self, collapsed: bool, animate: bool = True):
+        from PySide6.QtCore import QPropertyAnimation, QEasingCurve
+        self.engine.config.sidebar_collapsed = collapsed
+        self.brand.setVisible(not collapsed)
+        self.backend_lbl.setVisible(not collapsed)
+        self.collapse_btn.setText("\u203a" if collapsed else "\u2039")
+        self.collapse_btn.setToolTip(t("nav.expand") if collapsed else t("nav.collapse"))
+        for b, (key, icon, _page) in zip(self.nav_btns, self._nav_items):
+            b.setText(icon if collapsed else f"{icon}   {t(key)}")
+            b.setToolTip(t(key) if collapsed else "")
+            b.setProperty("compact", collapsed); b.style().unpolish(b); b.style().polish(b)
+        target = self.NAV_W_MIN if collapsed else self.NAV_W
+        if not animate:
+            self.nav.setFixedWidth(target); return
+        self.nav.setMinimumWidth(0); self.nav.setMaximumWidth(16777215)
+        anim = QPropertyAnimation(self.nav, b"maximumWidth", self)
+        anim.setDuration(180); anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.setStartValue(self.nav.width()); anim.setEndValue(target)
+        anim.finished.connect(lambda: self.nav.setFixedWidth(target))
+        self._nav_anim = anim; anim.start()
 
     def start(self):
         self.engine.start()
