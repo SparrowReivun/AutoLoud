@@ -17,6 +17,9 @@ _T = {
     "status.calibrating": ("校准中（已暂停自动控制）", "Calibrating (auto control paused)"),
     "status.disabled": ("已关闭", "Disabled"),
     "status.uncal": ("此设备尚未校准 → 请先校准", "This device is not calibrated yet → run calibration"),
+    "dash.b": ("舒适响度 B", "Comfort level B"),
+    "dash.b.hint": ("像音量旋钮一样拖：声音立刻跟着变，停下的位置就是新的目标 B。拖到来源本身达不到的位置时，提升会停在主音量余量的上限（不会削波）。",
+                    "Drag it like a volume knob: the sound follows at once and where you stop becomes the new target B. Beyond what the source can reach, the boost stops at the master-volume headroom (no clipping)."),
     "meter.momentary": ("瞬时 (400ms)", "Momentary (400 ms)"),
     "meter.short": ("短时 (3s)", "Short-term (3 s)"),
     "meter.integrated": ("窗口积分", "Window integrated"),
@@ -49,8 +52,9 @@ _T = {
     "cal.music.h": ("第 2 步 · 舒适响度 B", "Step 2 · Comfort level B"),
     "cal.music": (
         "选择来源并播放，把推子调到最舒适的听音响度。\n"
-        "所有来源都会被平滑地调整到这个响度。",
+        "这一步可以跳过：直接点「下一步」，之后在总览页用「舒适响度 B」滑块边听边定。",
         "Pick a source, play it and set the fader to the level you enjoy.\n"
+        "This step is optional: press Next and set B later with the dashboard slider while listening to anything.\n"
         "Every source will be levelled to this loudness."),
     "cal.source": ("来源", "Source"),
     "cal.source.hint": ("可以选内置曲目，也可以先用任意应用（Spotify、浏览器…）播放你自己的音乐，再在这里选中它；推子会直接控制那个应用的音量。",
