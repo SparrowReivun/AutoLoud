@@ -53,11 +53,11 @@ class Phase(str, Enum):
 @dataclass
 class ControllerParams:
     onset_ramp_s: float = 2.0        # (B - onset_below_b_db) -> B ramp after silence
-    onset_below_b_db: float = 10.0   # the onset floor "A" is this far below B
+    onset_below_b_db: float = 5.0    # the onset floor "A" is this far below B
     onset_guard_lufs: float = -10.0  # assumed loudness of an unknown new source
     ramp_s: float = 2.0              # ramp time of every adjustment step
     listen_s: float = 5.0            # listen this long before each decision
-    step_up_db: float = 0.5          # max raise per step
+    step_up_db: float = 0.5          # max raise of the 1st step; the n-th consecutive raise may be n x this
     step_down_db: float = 2.0        # max cut per step
     deadband_db: float = 0.5         # |error| below this = comfortable
     steady_trigger_db: float = 5.0   # a 5 s block above B + this restarts adjusting
@@ -132,6 +132,8 @@ class GainController:
         self._safety_guard_until: float = 0.0        # no protection cuts before this (B shift landing)
         self._last_r: LoudnessReading | None = None
         self._last_extra: float = 0.0
+        self._up_streak = 0                 # consecutive "too quiet" steps (raise cap grows with it)
+        self._fresh = False                 # first decision of a new work / onset: a cut goes all the way
         self.steps_taken = 0
         self.events: deque[tuple[int, float, str, dict]] = deque(maxlen=12)   # (seq, now, kind, data)
         self._seq = 0
@@ -200,6 +202,7 @@ class GainController:
         else:
             self._log(now, "new_work", mode="mixed", gain=self._ramp.end_db)
         self.phase = Phase.ADJUST
+        self._up_streak, self._fresh = 0, True
         self._arm_block(now + 0.3, meter)
 
     def shift_target(self, delta_db: float, now: float, meter=None) -> None:
@@ -224,6 +227,7 @@ class GainController:
         new_gain = self._clamp(new_gain)
         self._ramp.retarget(now, new_gain, p.b_shift_ramp_s)
         self._pre_safety_gain = None                   # the user has set a new level
+        self._up_streak, self._fresh = 0, False
         self._safety_guard_until = now + p.b_shift_ramp_s + 1.0   # momentary lags ~0.4 s
         self._log(now, "b_shift", delta=delta_db, gain=new_gain, b=T.b_lufs, dur=p.b_shift_ramp_s)
         if self.phase in (Phase.ADJUST, Phase.STEADY):
@@ -340,6 +344,7 @@ class GainController:
                           cut=cut, gain=self._ramp.end_db)
                 self.phase = Phase.SAFETY
                 self._safety_t = now
+                self._up_streak, self._fresh = 0, False
                 self._block_start = self._block_arm_t = None
 
         if self.phase == Phase.ONSET:
@@ -349,6 +354,7 @@ class GainController:
             self._ramp.retarget(now, self._clamp(min(target_lufs - src, onset_cap_db)), 0.25)
             if f >= 1.0:
                 self.phase = Phase.ADJUST
+                self._up_streak, self._fresh = 0, True
                 self._arm_block(now, meter)
 
         elif self.phase == Phase.ADJUST:
@@ -400,18 +406,24 @@ class GainController:
         error = T.b_lufs - block          # >0 too quiet, <0 too loud
         if abs(error) <= p.deadband_db:
             self.phase = Phase.STEADY
+            self._up_streak, self._fresh = 0, False
             self._log(now, "steady", block=block, error=error)
             self._arm_block(now, getattr(self, "_meter", None))
             return
         g = self._ramp.end_db
         if error > 0:
-            up = p.step_up_db
+            # too quiet: 1x, 2x, 3x ... step_up_db on consecutive raises
+            self._up_streak += 1
+            up = p.step_up_db * self._up_streak
             pre = self._pre_safety_gain
             if pre is not None and g < pre:            # recovering from a protection cut
                 up = max(up, min(p.step_down_db, pre - g))
             step = min(up, error)
         else:
-            step = max(-p.step_down_db, error)
+            self._up_streak = 0
+            # too loud right after a new work / onset: go all the way in one step
+            step = error if self._fresh else max(-p.step_down_db, error)
+        self._fresh = False
         if self._pre_safety_gain is not None and g + step >= self._pre_safety_gain:
             self._pre_safety_gain = None               # back where we were: normal rules again
         self._ramp.retarget(now, self._clamp(g + step), p.ramp_s)

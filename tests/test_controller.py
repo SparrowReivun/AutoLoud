@@ -42,7 +42,7 @@ T = lambda: Targets(b_lufs=-22)
 def test_onset_from_silence_is_held_near_A_then_reaches_B():
     log = run_sim(lambda t: -8.0 if t > 1.0 else None, 10.0, T())
     first = [p for t, p, c in log if 1.5 < t < 1.7]
-    assert max(first) < -32 + 4, max(first)
+    assert max(first) < -27 + 4, max(first)                # floor is B - 5 = -27
     end = [p for t, p, c in log if t > 5.0]
     assert abs(np.mean(end) - (-22)) < 1.5, np.mean(end)
 
@@ -55,9 +55,12 @@ def test_adjust_steps_are_small_up_and_larger_down():
             ctl.phase = Phase.ADJUST; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
     log = run_sim(lambda t: -26.0, 40.0, T(), P, hook=hook)
     gains = [c.total_db for t, p, c in log]
-    assert 0.4 <= max(gains) <= 2.6, max(gains)           # ~5 steps of 0.5 in 40 s, never more
+    # raises escalate 0.5, 1.0, 1.5, then the remaining 1.0: 4 dB reached in ~4 steps, never beyond
+    assert 3.5 <= max(gains) <= 4.3, max(gains)
+    g12 = max(c.total_db for t, p, c in log if t < 12.5)
+    assert g12 <= 1.6, g12                                # first two steps: 0.5 + 1.0
     steps = [abs(b - a) for a, b in zip(gains, gains[1:])]
-    assert max(steps) < 0.5 * 0.01 / 2 * 1.5 + 1e-6      # 0.5 dB over 2 s -> 0.0025 dB per 10 ms
+    assert max(steps) < 1.5 * 0.01 / 2 * 1.5 + 1e-6      # largest single ramp 1.5 dB over 2 s
     # too loud by 6 dB -> -2 dB steps, converges within ~25 s
     log = run_sim(lambda t: -16.0, 30.0, T(), P, hook=hook)
     end = [p for t, p, c in log if t > 25]
@@ -140,7 +143,7 @@ def test_returns_to_idle_and_prearms():
     log = run_sim(lambda t: -20.0 if t < 3 else None, 7.0, T(), P)
     end = log[-1][2]
     assert end.phase == Phase.IDLE
-    assert abs(end.total_db - (-32 - (-10))) < 1e-6
+    assert abs(end.total_db - (-27 - (-10))) < 1e-6       # parked for a -10 LUFS source landing on B - 5
 
 
 def test_boost_no_runaway_with_hidden_master():
@@ -195,3 +198,22 @@ def test_onset_does_not_boost_a_quiet_intro_into_a_blast():
     log = run_sim(src, 8.0, T())
     assert max(c.total_db for t, p, c in log) <= 0.0 + 1e-6          # never boosted during the onset
     assert not any(c.safety_triggered for t, p, c in log)            # so the content does not trip protection
+
+
+def test_new_work_too_loud_is_cut_in_one_step_then_raises_escalate():
+    # ADJUST fresh (as after a new work), source 9 dB too loud -> one full -9 dB step
+    def hook(ctl, meter, t):
+        if t == 0.0:
+            ctl.phase = Phase.ADJUST; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0)
+            ctl._up_streak, ctl._fresh = 0, True; ctl._arm_block(0.0, meter)
+    log = run_sim(lambda t: -13.0, 12.0, T(), hook=hook)
+    g = [c.total_db for t, p, c in log if t > 8]
+    assert all(abs(x - (-9.0)) < 0.3 for x in g), (min(g), max(g))
+    # not fresh: the same cut is capped at step_down_db (2 dB)
+    def hook2(ctl, meter, t):
+        if t == 0.0:
+            ctl.phase = Phase.ADJUST; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0)
+            ctl._up_streak, ctl._fresh = 0, False; ctl._arm_block(0.0, meter)
+    log = run_sim(lambda t: -13.0, 12.0, T(), hook=hook2)
+    g = [c.total_db for t, p, c in log if t > 8]
+    assert min(g) >= -2.1, min(g)

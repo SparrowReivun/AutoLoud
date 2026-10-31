@@ -6,6 +6,7 @@
 - Calibration is one step: set external device and master volume to ~80 %, play music you like, raise the fader from 0 to comfortable → B. The harsh-beep "ceiling A" step and all A-related logic are gone; the onset guard now starts a fixed 10 dB below B (adjustable in Settings).
 - Protection: a loud sound is now cut *fast* (0.15 s) down to B + 5 dB (adjustable), measured from the gain actually sounding, and re-corrected once the meter catches up; a cut also overrides a frozen fader hold. The notice stays 10 s, carries the comfort level B slider, and points to the dashboard for the trigger threshold, which now has its own slider there.
 - Settings are reset to the new defaults once (config_version 4); profiles and app mixer settings are kept.
+- Nudges: consecutive raises escalate (1x, 2x, 3x… the step cap) so a quiet work is reached in seconds rather than minutes; the first decision after a new work or onset cuts all the way if too loud. Onset floor is now B − 5 dB.
 - Onset guard no longer boosts: during the 2 s onset the gain is capped at the app's remembered gain (0 dB for an unknown app), so a quiet intro is not pulled up to B only for the real content to blast in and trip the protection; boosting is left to the slow nudges.
 - B slider: moving B now sends the gain straight to what the new B needs in one smooth ramp (2 s, adjustable in Settings) instead of the 5 s listen / 0.5 dB nudges, and the sudden-loudness protection is held off until the move has landed, so lowering B no longer pops the notice.
 
