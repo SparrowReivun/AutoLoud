@@ -2,7 +2,8 @@
 # PyInstaller spec: builds a single-file windowed exe.
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
-hidden = collect_submodules("pycaw") + collect_submodules("comtypes") + ["pyaudiowpatch", "psutil", "soundfile"]
+hidden = (collect_submodules("pycaw") + collect_submodules("comtypes")
+          + ["pyaudiowpatch", "psutil", "soundfile", "winsdk", "winsdk.windows.media.control", "winsdk.windows.foundation"])
 datas = [("assets/autoloud.ico", "assets"), ("assets/autoloud.png", "assets"),
          ("assets/music/default", "assets/music/default")] + collect_data_files("soundfile")
 

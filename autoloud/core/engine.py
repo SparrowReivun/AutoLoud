@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import threading
 import time
 from dataclasses import dataclass, field, replace
@@ -19,6 +20,7 @@ from autoloud.backends.base import AudioSession, Backend, OutputDevice
 from autoloud.core.controller import GainCommand, GainController
 from autoloud.core.profiles import AppConfig, DeviceProfile
 from autoloud.dsp.loudness import LoudnessReading, MIN_LUFS, StreamingLoudnessMeter
+from autoloud.core.works import WorkTracker, WorkInfo
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +37,8 @@ class EngineState:
     command: GainCommand | None = None
     sessions: list[AudioSession] = field(default_factory=list)
     master_db: float = 0.0
+    works: dict[str, WorkInfo] = field(default_factory=dict)   # app name -> current work
+    media_available: bool = False
     error: str = ""
 
 
@@ -61,8 +65,25 @@ class Engine:
         self._known_active: set[str] = set()
         self._extra_visible_db = 0.0                   # mixer gain the loopback contains
         self._auto_share_db = 0.0                      # 10*log10(power share of auto apps)
+        self.media = self._make_media_provider()
+        self.works = WorkTracker(silence_s=config.params.work_silence_s,
+                                 silence_peak=config.params.work_silence_peak,
+                                 media=self.media)
         self.listeners: list[Callable[[EngineState], None]] = []
         self._last_cmd: GainCommand | None = None
+
+    @staticmethod
+    def _make_media_provider():
+        import sys
+        if not sys.platform.startswith("win") or os.environ.get("AUTOLOUD_MOCK"):
+            return None
+        try:
+            from autoloud.backends.media_windows import WindowsMediaProvider
+            p = WindowsMediaProvider()
+            return p if p.available else None
+        except Exception:
+            log.exception("media provider init failed")
+            return None
 
     # ------------------------------------------------------------------
     @property
@@ -150,6 +171,8 @@ class Engine:
     def apply_params(self) -> None:
         if self.controller is not None:
             self.controller.params = self.config.params
+        self.works.silence_s = self.config.params.work_silence_s
+        self.works.silence_peak = self.config.params.work_silence_peak
         if self.meter is not None:
             self.meter.block_powers = type(self.meter.block_powers)(
                 self.meter.block_powers, maxlen=max(1, int(self.config.params.window_s / 0.1)))
@@ -187,11 +210,19 @@ class Engine:
                         self.controller.notify_source_change(now)
                     self._known_active = active
                     self._update_auto_share(sessions)
+                    for app_name, work in self.works.update(sessions, now):
+                        mix = self.config.apps.get(app_name)
+                        log.info("new work in %s: #%d %s (%s)", app_name, work.index,
+                                 work.label() or "-", work.source)
+                        if self.controller is not None and self.config.enabled and (mix is None or mix.auto):
+                            self.controller.notify_new_work(now, self.meter)
                     try:
                         master_db = self.backend.get_master_db(self.device)
                     except Exception:
                         master_db = 0.0
-                    self._set_state(sessions=sessions, master_db=master_db)
+                    self._set_state(sessions=sessions, master_db=master_db,
+                                    works=self.works.all_current(),
+                                    media_available=self.media is not None)
 
                 cmd = None
                 if not self._calibrating:
