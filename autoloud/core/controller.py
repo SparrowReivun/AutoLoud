@@ -400,7 +400,7 @@ class GainController:
                     self._decide(now, r)          # this block counts as the first listen
                 else:
                     if block is not None:
-                        self._log(now, "watch", block=block, error=T.b_lufs - block,
+                        self._log(now, "watch", block=block, rel=block - T.b_lufs,
                                   over_n=self._over_blocks, under_n=self._under_blocks)
                     self._arm_block(now, meter)    # keep watching, do not chase
 
@@ -437,7 +437,7 @@ class GainController:
             self.phase = Phase.STEADY
             self._up_streak, self._fresh = 0, False
             self._over_blocks = self._under_blocks = 0
-            self._log(now, "steady", block=block, error=error)
+            self._log(now, "steady", block=block, rel=-error)
             self._arm_block(now, getattr(self, "_meter", None))
             return
         g = self._ramp.end_db
@@ -459,6 +459,6 @@ class GainController:
         if self._pre_safety_gain is not None and g + step >= self._pre_safety_gain:
             self._pre_safety_gain = None               # back where we were: normal rules again
         self._ramp.retarget(now, self._clamp(g + step), p.listen_s)
-        self._log(now, "step", block=block, error=error, step=step, frm=g, to=self._ramp.end_db, dur=p.listen_s)
+        self._log(now, "step", block=block, rel=-error, step=step, frm=g, to=self._ramp.end_db, dur=p.listen_s)
         self.steps_taken += 1
         self._arm_block(now + p.listen_s, getattr(self, "_meter", None))

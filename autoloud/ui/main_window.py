@@ -113,8 +113,6 @@ class DashboardPage(QWidget):
         act = Card()
         self.act_now = QLabel("—"); self.act_now.setObjectName("h2"); self.act_now.setWordWrap(True)
         act.body.addWidget(self.act_now)
-        self.act_bar = QProgressBar(); self.act_bar.setRange(0, 1000); self.act_bar.setTextVisible(False)
-        self.act_bar.setFixedHeight(6); act.body.addWidget(self.act_bar)
         self.act_log = QLabel(""); self.act_log.setObjectName("muted"); self.act_log.setWordWrap(True)
         self.act_log.setTextFormat(Qt.RichText)
         act.body.addWidget(self.act_log)
@@ -149,7 +147,9 @@ class DashboardPage(QWidget):
         elif "listen" in a:
             l = a["listen"]
             key = "act.listen_steady" if a["phase"] == "steady" else "act.listen"
-            now_txt = t(key).format(el=l["elapsed"], tot=l["total"], g=a["gain"], lufs=s.reading.integrated)
+            b = s.profile.b_lufs if s.profile is not None else 0.0
+            now_txt = t(key).format(el=l["elapsed"], tot=l["total"], g=a["gain"], lufs=s.reading.integrated,
+                                    rel=s.reading.integrated - b)
             frac = l["elapsed"] / max(1e-3, l["total"])
         elif "listen_in" in a:
             now_txt = t("act.listen_in").format(sec=a["listen_in"], g=a["gain"])
@@ -158,9 +158,6 @@ class DashboardPage(QWidget):
         elif a.get("phase") == "idle":
             now_txt = t("act.idle").format(g=a["gain"])
         self.act_now.setText(now_txt)
-        self.act_bar.setVisible(frac is not None)
-        if frac is not None:
-            self.act_bar.setValue(int(max(0.0, min(1.0, frac)) * 1000))
         lines = []
         for ts, kind, d in list(s.events)[-6:][::-1]:
             lines.append(f'<span style="color:#8b919b">{_time.strftime("%H:%M:%S", _time.localtime(ts))}</span>&nbsp; {self._fmt_event(kind, d)}')
