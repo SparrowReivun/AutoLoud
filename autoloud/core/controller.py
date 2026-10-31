@@ -129,6 +129,8 @@ class GainController:
         self._safety_t: float | None = None
         self._pre_safety_gain: float | None = None   # gain before the last protection cut
         self.steps_taken = 0
+        self.events: deque[tuple[int, float, str, dict]] = deque(maxlen=12)   # (seq, now, kind, data)
+        self._seq = 0
         self.enter_idle(0.0)
 
     # ------------------------------------------------------------------
@@ -136,7 +138,30 @@ class GainController:
     def gain_db(self) -> float:
         return self._ramp.end_db
 
+    def _log(self, now: float, kind: str, **data) -> None:
+        self._seq += 1
+        self.events.append((self._seq, now, kind, data))
+
+    def activity(self, now: float) -> dict:
+        """What is happening right now, for the dashboard."""
+        rp = self._ramp
+        a = {"phase": self.phase.value, "gain": rp.value(now), "gain_end": rp.end_db}
+        if not rp.done(now) and rp.dur > 0:
+            a["ramp"] = {"from": rp.start_db, "to": rp.end_db, "dur": rp.dur,
+                         "left": max(0.0, rp.t0 + rp.dur - now)}
+        if self._block_start is not None:
+            a["listen"] = {"elapsed": now - self._block_start, "total": self.params.listen_s}
+        elif self._block_arm_t is not None and now < self._block_arm_t:
+            a["listen_in"] = self._block_arm_t - now
+        if self.phase == Phase.ONSET and self._onset_t is not None:
+            a["onset"] = {"elapsed": now - self._onset_t, "total": self.params.onset_ramp_s}
+        if self.phase == Phase.SAFETY and self._pre_safety_gain is not None:
+            a["pre_safety_gain"] = self._pre_safety_gain
+        return a
+
     def enter_idle(self, now: float) -> None:
+        if self.phase != Phase.IDLE:
+            self._log(now, "idle", gain=self._clamp(self.targets.a_lufs - self.params.onset_guard_lufs))
         self.phase = Phase.IDLE
         g = self.targets.a_lufs - self.params.onset_guard_lufs
         self._ramp.retarget(now, self._clamp(g), 0.0)
@@ -159,8 +184,12 @@ class GainController:
         if alone:
             if remembered_gain_db is not None:
                 self._ramp.retarget(now, self._clamp(remembered_gain_db), 0.3)
+                self._log(now, "new_work", mode="remembered", gain=self._ramp.end_db)
             else:
                 self._ramp.retarget(now, self._clamp(self._ramp.value(now) + self.params.first_time_offset_db), 0.3)
+                self._log(now, "new_work", mode="first", gain=self._ramp.end_db)
+        else:
+            self._log(now, "new_work", mode="mixed", gain=self._ramp.end_db)
         self.phase = Phase.ADJUST
         self._arm_block(now + 0.3, meter)
 
@@ -172,6 +201,7 @@ class GainController:
             self.enter_idle(now)           # re-park with the new A/B
             return
         self._ramp.retarget(now, self._clamp(self._ramp.value(now) + delta_db), 0.2)
+        self._log(now, "b_shift", delta=delta_db, gain=self._ramp.end_db, b=self.targets.b_lufs)
         if self.phase in (Phase.ADJUST, Phase.STEADY):
             self._arm_block(now + 0.2, meter)
 
@@ -179,6 +209,7 @@ class GainController:
         """The protection notice closed: re-adjust from the current gain."""
         if self.phase == Phase.SAFETY:
             self.phase = Phase.ADJUST
+            self._log(now, "resume", gain=self._ramp.end_db)
             self._arm_block(now, meter)
 
     # ------------------------------------------------------------------
@@ -242,6 +273,7 @@ class GainController:
         if self.phase == Phase.IDLE and r.has_signal:
             self.phase = Phase.ONSET
             self._onset_t = now
+            self._log(now, "onset", a=T.a_lufs, b=T.b_lufs)
         elif self.phase != Phase.IDLE and silent_for > p.silence_timeout_s:
             self.enter_idle(now)
 
@@ -259,6 +291,8 @@ class GainController:
                 if self.phase != Phase.SAFETY:
                     safety_now = True
                     self._pre_safety_gain = g_now
+                self._log(now, "safety", perceived=perceived_now, excess=excess,
+                          cut=excess + p.safety_hysteresis_db, gain=self._ramp.end_db)
                 self.phase = Phase.SAFETY
                 self._safety_t = now
                 self._block_start = self._block_arm_t = None
@@ -283,8 +317,11 @@ class GainController:
                 block = self._block_perceived(now, r)
                 if block is not None and block > T.b_lufs + p.steady_trigger_db:
                     self.phase = Phase.ADJUST
+                    self._log(now, "readjust", block=block, over=block - T.b_lufs)
                     self._decide(now, r)          # this block counts as the first listen
                 else:
+                    if block is not None:
+                        self._log(now, "watch", block=block, error=T.b_lufs - block)
                     self._arm_block(now, meter)    # keep watching, do not chase
 
         # SAFETY: hold; the engine calls resume_after_safety() when the notice closes
@@ -318,6 +355,7 @@ class GainController:
         error = T.b_lufs - block          # >0 too quiet, <0 too loud
         if abs(error) <= p.deadband_db:
             self.phase = Phase.STEADY
+            self._log(now, "steady", block=block, error=error)
             self._arm_block(now, getattr(self, "_meter", None))
             return
         g = self._ramp.end_db
@@ -332,5 +370,6 @@ class GainController:
         if self._pre_safety_gain is not None and g + step >= self._pre_safety_gain:
             self._pre_safety_gain = None               # back where we were: normal rules again
         self._ramp.retarget(now, self._clamp(g + step), p.ramp_s)
+        self._log(now, "step", block=block, error=error, step=step, frm=g, to=self._ramp.end_db, dur=p.ramp_s)
         self.steps_taken += 1
         self._arm_block(now + p.ramp_s, getattr(self, "_meter", None))

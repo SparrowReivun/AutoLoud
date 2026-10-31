@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+from collections import deque
 import threading
 import time
 from dataclasses import dataclass, field, replace
@@ -39,6 +40,8 @@ class EngineState:
     master_db: float = 0.0
     works: dict[str, WorkInfo] = field(default_factory=dict)   # app name -> current work
     media_available: bool = False
+    activity: dict = field(default_factory=dict)       # controller.activity(): ramp / listen progress
+    events: list = field(default_factory=list)         # [(wall_time, kind, data)] newest last
     safety_active: bool = False      # protection cut in force (notice should be showing)
     safety_count: int = 0            # increments on every new cut (UI shows the notice on change)
     error: str = ""
@@ -68,6 +71,8 @@ class Engine:
         self._extra_visible_db = 0.0                   # mixer gain the loopback contains
         self._auto_share_db = 0.0                      # 10*log10(power share of auto apps)
         self._holds: dict[str, float] = {}             # app -> bus gain frozen by a manual fader move
+        self._events: deque = deque(maxlen=14)         # engine-level + controller events, wall clock
+        self._ctl_events_seen = 0
         self._safety_count = 0
         self.media = self._make_media_provider()
         self.works = WorkTracker(silence_s=config.params.work_silence_s,
@@ -214,6 +219,8 @@ class Engine:
                     for app_name, work in self.works.update(sessions, now):
                         log.info("new work in %s: #%d %s (%s)", app_name, work.index,
                                  work.label() or "-", work.source)
+                        self._event("work", app=self.config.display_name(app_name), index=work.index,
+                                    label=work.label(), source=work.source)
                         self._holds.pop(app_name, None)        # a manual hold ends with the work
                         if self.controller is not None and self.config.enabled and self._follows_bus(app_name):
                             mix = self.config.mix_for(app_name)
@@ -251,8 +258,13 @@ class Engine:
                         self.config.save()
                     except Exception:
                         log.exception("config save")
+                activity = {}
+                if self.controller is not None and cmd is not None:
+                    activity = self.controller.activity(now)
+                    self._drain_controller_events(now)
                 self._set_state(reading=r, command=cmd, calibrating=self._calibrating,
-                                enabled=self.config.enabled,
+                                enabled=self.config.enabled, activity=activity,
+                                events=list(self._events),
                                 safety_active=(cmd is not None and cmd.phase.value == "safety"),
                                 safety_count=self._safety_count)
             except Exception as e:
@@ -261,6 +273,15 @@ class Engine:
             dt = period - (time.perf_counter() - t0)
             if dt > 0:
                 time.sleep(dt)
+
+    def _event(self, kind: str, **data) -> None:
+        self._events.append((time.time(), kind, data))
+
+    def _drain_controller_events(self, now: float) -> None:
+        for seq, t_mono, kind, data in list(self.controller.events):
+            if seq > self._ctl_events_seen:
+                self._ctl_events_seen = seq
+                self._events.append((time.time() - (now - t_mono), kind, dict(data)))
 
     def _follows_bus(self, app_name: str) -> bool:
         """Does the bus auto gain currently apply to this app?"""
@@ -272,6 +293,7 @@ class Engine:
         current work ends."""
         if self.config.enabled and self._last_cmd is not None and self._follows_bus(app_name):
             self._holds[app_name] = self._last_cmd.total_db
+            self._event("hold", app=self.config.display_name(app_name), gain=self._last_cmd.total_db)
         self.mixer_changed()
 
     def set_target_b(self, b_lufs: float) -> None:
@@ -312,6 +334,7 @@ class Engine:
             self.controller.retune(p.targets())
         self._dirty = True
         log.info("master volume moved by user (%+.1f dB): new reference %.1f dB", delta, p.master_ref_db)
+        self._event("master_moved", delta=delta, ref=p.master_ref_db)
         self._set_state(profile=p)
 
     def _update_auto_share(self, sessions: list[AudioSession]) -> None:

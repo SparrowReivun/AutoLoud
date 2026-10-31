@@ -98,6 +98,16 @@ class DashboardPage(QWidget):
         self.k_target = self._kpi(grid, t("meter.target"))
         lay.addLayout(grid)
 
+        act = Card()
+        self.act_now = QLabel("—"); self.act_now.setObjectName("h2"); self.act_now.setWordWrap(True)
+        act.body.addWidget(self.act_now)
+        self.act_bar = QProgressBar(); self.act_bar.setRange(0, 1000); self.act_bar.setTextVisible(False)
+        self.act_bar.setFixedHeight(6); act.body.addWidget(self.act_bar)
+        self.act_log = QLabel(""); self.act_log.setObjectName("muted"); self.act_log.setWordWrap(True)
+        self.act_log.setTextFormat(Qt.RichText)
+        act.body.addWidget(self.act_log)
+        lay.addWidget(act)
+
         prof = Card()
         self.prof_lbl = QLabel("—")
         self.prof_lbl.setObjectName("muted")
@@ -108,6 +118,54 @@ class DashboardPage(QWidget):
         self.err.setWordWrap(True)
         lay.addWidget(self.err)
         lay.addStretch(1)
+
+    def _update_activity(self, s: EngineState):
+        import time as _time
+        a = s.activity or {}
+        c = s.command
+        now_txt, frac = "—", None
+        if c is None:
+            now_txt = t("status.calibrating") if s.calibrating else t("act.off")
+        elif "ramp" in a:
+            r = a["ramp"]
+            now_txt = t("act.ramp").format(frm=r["from"], to=r["to"], d=r["to"] - r["from"], dur=r["dur"], left=r["left"])
+            frac = 1.0 - r["left"] / max(1e-3, r["dur"])
+        elif "onset" in a:
+            o = a["onset"]
+            now_txt = t("act.onset").format(el=o["elapsed"], tot=o["total"], g=a["gain"])
+            frac = o["elapsed"] / max(1e-3, o["total"])
+        elif "listen" in a:
+            l = a["listen"]
+            key = "act.listen_steady" if a["phase"] == "steady" else "act.listen"
+            now_txt = t(key).format(el=l["elapsed"], tot=l["total"], g=a["gain"], lufs=s.reading.integrated)
+            frac = l["elapsed"] / max(1e-3, l["total"])
+        elif "listen_in" in a:
+            now_txt = t("act.listen_in").format(sec=a["listen_in"], g=a["gain"])
+        elif a.get("phase") == "safety":
+            now_txt = t("act.safety").format(g=a["gain"], pre=a.get("pre_safety_gain", a["gain"]))
+        elif a.get("phase") == "idle":
+            now_txt = t("act.idle").format(g=a["gain"])
+        self.act_now.setText(now_txt)
+        self.act_bar.setVisible(frac is not None)
+        if frac is not None:
+            self.act_bar.setValue(int(max(0.0, min(1.0, frac)) * 1000))
+        lines = []
+        for ts, kind, d in list(s.events)[-6:][::-1]:
+            lines.append(f'<span style="color:#8b919b">{_time.strftime("%H:%M:%S", _time.localtime(ts))}</span>&nbsp; {self._fmt_event(kind, d)}')
+        self.act_log.setText("<br>".join(lines))
+
+    @staticmethod
+    def _fmt_event(kind: str, d: dict) -> str:
+        d = dict(d)
+        if kind == "new_work":
+            d["mode"] = t("ev.mode." + d.get("mode", "mixed"))
+        if kind == "work":
+            d["label"] = (" · " + d["label"]) if d.get("label") else ""
+            d["source"] = t("ev.src." + d.get("source", "silence"))
+        try:
+            return t("ev." + kind).format(**d)
+        except Exception:
+            return f"{kind} {d}"
 
     def _kpi(self, grid, label):
         c = Card()
@@ -167,6 +225,7 @@ class DashboardPage(QWidget):
             for k in (self.k_total, self.k_session, self.k_master, self.k_target):
                 k.setText("—")
         self.status.setText(t(key))
+        self._update_activity(s)
         self.enable.blockSignals(True)
         self.enable.setChecked(s.enabled)
         self.enable.blockSignals(False)

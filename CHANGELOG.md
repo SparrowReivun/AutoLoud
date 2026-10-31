@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Dashboard activity card: what the controller is doing right now (ramp from → to over N s, listening progress, protection hold, idle) and a log of its last decisions, for tuning the rules.
+
 ## 0.2.0 — 2026-10-31
 
 - Dashboard "Comfort level B" slider: drag it like a volume knob, the sound follows at once and where it stops is the new B. The music step of the calibration wizard is now optional (B defaults to A + 6 dB until set).
