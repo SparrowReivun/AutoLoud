@@ -73,6 +73,8 @@ class ControllerParams:
     min_session_gain_db: float = -40.0
     work_silence_s: float = 15.0         # silence: per-app -> the work ended; whole mix -> IDLE (onset guard re-armed)
     work_silence_peak: float = 0.003     # near-silence threshold on the session peak meter (~-50 dBFS)
+    tool_window_s: float = 60.0          # an app "active" this long while sounding < tool_max_duty of the time ...
+    tool_max_duty: float = 0.10          # ... is a tool (key clicks, notifications): its mixer Auto is switched off
 
 
 @dataclass

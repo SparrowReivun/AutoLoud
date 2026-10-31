@@ -71,6 +71,7 @@ class Engine:
         self._extra_visible_db = 0.0                   # mixer gain the loopback contains
         self._auto_share_db = 0.0                      # 10*log10(power share of auto apps)
         self._holds: dict[str, float] = {}             # app -> bus gain frozen by a manual fader move
+        self._duty: dict[str, deque] = {}              # app -> (t, sounding) samples while active (tool detector)
         self._events: deque = deque(maxlen=14)         # engine-level + controller events, wall clock
         self._ctl_events_seen = 0
         self._safety_count = 0
@@ -214,6 +215,7 @@ class Engine:
                     active = {s.key for s in sessions if s.active and not s.is_self}
                     self._known_active = active
                     self._update_auto_share(sessions)
+                    self._detect_tool_apps(sessions, now)
                     auto_active = [s.name for s in sessions if s.active and not s.is_self
                                    and self._follows_bus(s.name)]
                     for app_name, work in self.works.update(sessions, now):
@@ -285,6 +287,39 @@ class Engine:
             if seq > self._ctl_events_seen:
                 self._ctl_events_seen = seq
                 self._events.append((time.time() - (now - t_mono), kind, dict(data)))
+
+    def _detect_tool_apps(self, sessions: list[AudioSession], now: float) -> None:
+        """An app whose session stays active but which actually sounds less
+        than ``tool_max_duty`` of the time over ``tool_window_s`` (IME key
+        clicks, notification helpers...) gets its mixer Auto switched off, so
+        it neither follows the bus gain nor spoils the "playing alone" test
+        for the real players. A user who ticks Auto back on wins for good."""
+        p = self.config.params
+        for s in sessions:
+            if s.is_self:
+                continue
+            mix = self.config.apps.get(s.name)
+            if mix is not None and (not mix.auto or mix.auto_set_by == "user"):
+                self._duty.pop(s.name, None)
+                continue
+            if not s.active:
+                self._duty.pop(s.name, None)          # the window counts continuous activity only
+                continue
+            d = self._duty.setdefault(s.name, deque())
+            d.append((now, s.peak > p.work_silence_peak))
+            while d and d[0][0] < now - p.tool_window_s:
+                d.popleft()
+            if len(d) < 4 or now - d[0][0] < p.tool_window_s - 2 * self.SESSION_POLL_S:
+                continue
+            duty = sum(1 for _t, on in d if on) / len(d)
+            if duty < p.tool_max_duty:
+                mix = self.config.mix_for(s.name)
+                mix.auto, mix.auto_set_by = False, "tool"
+                self._dirty = True
+                self._duty.pop(s.name, None)
+                log.info("tool app detected: %s sounds %.0f%% of the time -> Auto off", s.name, duty * 100)
+                self._event("tool_app", app=self.config.display_name(s.name), duty=duty * 100)
+                self.mixer_changed()
 
     def _onset_gains(self, sessions: list[AudioSession]) -> tuple[float, float | None]:
         """(cap, start) for the onset after silence.

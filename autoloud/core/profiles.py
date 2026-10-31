@@ -43,6 +43,7 @@ class AppMix:
     auto: bool = True             # whether the bus auto-loudness gain applies to this app
     alias: str = ""               # user label (e.g. "Apple Music" for AMP)
     last_gain_db: float | None = None   # bus gain this app ended up with last time (rule 1)
+    auto_set_by: str = ""         # "" | "tool" (auto switched off by the tool-app detector) | "user" (never touch again)
 
 
 @dataclass

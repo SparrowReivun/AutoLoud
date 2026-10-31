@@ -113,6 +113,8 @@ _T = {
     "apps.fader": ("推子", "Fader"),
     "apps.auto": ("自动", "Auto"),
     "apps.auto.tip": ("总线自动响度是否作用于这个应用", "Whether the bus auto loudness applies to this app"),
+    "apps.auto.tool": ("程序判断这是工具类应用（活动但几乎不出声），已自动关闭；你勾上后不会再自动关", "Detected as a tool app (active but almost never sounding): Auto was switched off automatically; tick it and it stays on"),
+    "ev.tool_app": ("{app} 活动但只有 {duty:.0f}% 的时间在出声 → 判为工具类应用，混音台「自动」已关", "{app} is active but sounds only {duty:.0f}% of the time → tool app, mixer Auto switched off"),
     "apps.reset": ("归零", "Reset to 0 dB"),
     "apps.alias.tip": ("给这个应用起个好认的名字（例如把 AMP 改成 Apple Music）", "Give this app a recognisable name (e.g. AMP → Apple Music)"),
     "apps.idle": ("未发声", "idle"),

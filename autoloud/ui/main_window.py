@@ -304,6 +304,11 @@ class AppsPage(QWidget):
                 self._smooth[sess.key] = sm + (pk - sm) * 0.3
             row["bar"].setValue(int(min(1.0, sess.peak) * 100))
             row["active"] = sess.active
+            mix = self.engine.config.apps.get(sess.name)
+            if mix is not None and row["auto"].isChecked() != mix.auto:   # the tool detector switched it
+                row["auto"].blockSignals(True); row["auto"].setChecked(mix.auto); row["auto"].blockSignals(False)
+            if mix is not None:
+                row["auto"].setToolTip(t("apps.auto.tool") if mix.auto_set_by == "tool" else t("apps.auto.tip"))
             w = s.works.get(sess.name)
             if w is None:
                 row["work"].setText("")
@@ -352,7 +357,7 @@ class AppsPage(QWidget):
         auto = QCheckBox(t("apps.auto")); auto.setChecked(mix.auto)
         auto.setToolTip(t("apps.auto.tip"))
         def auto_changed(on, m=mix, n=name):
-            m.auto = bool(on); self._changed(n)
+            m.auto = bool(on); m.auto_set_by = "user"; self._changed(n)
         auto.toggled.connect(auto_changed)
         top.addWidget(auto)
         work = QLabel(""); work.setObjectName("muted"); work.setToolTip(t("apps.work.tip"))
