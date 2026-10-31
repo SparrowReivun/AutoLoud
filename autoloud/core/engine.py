@@ -47,6 +47,9 @@ class EngineState:
     error: str = ""
 
 
+B_MUTE_LUFS = -60.0   # the B slider's bottom: auto apps are muted outright
+
+
 class Engine:
     CONTROL_HZ = 50
     SESSION_POLL_S = 0.5
@@ -455,6 +458,9 @@ class Engine:
         """
         G = cmd.total_db if cmd is not None else 0.0
         cfg = self.config
+        # B slider at its very bottom = mute every app that follows the bus
+        if cmd is not None and self.profile is not None and self.profile.b_lufs <= B_MUTE_LUFS + 0.05:
+            G = -120.0
         apps = [s for s in sessions if not s.is_self]
         desired: dict[str, float] = {}
         for s in apps:

@@ -20,6 +20,7 @@ _T = {
     "status.disabled": ("已关闭", "Disabled"),
     "status.uncal": ("此设备尚未校准 → 请先校准", "This device is not calibrated yet → run calibration"),
     "dash.b": ("舒适响度 B", "Comfort level B"),
+    "dash.b.mute": ("静音", "Muted"),
     "dash.b.hint": ("像音量旋钮一样拖：声音立刻跟着变，停下的位置就是新的目标 B。拖到来源本身达不到的位置时，提升会停在主音量余量的上限（不会削波）。",
                     "Drag it like a volume knob: the sound follows at once and where you stop becomes the new target B. Beyond what the source can reach, the boost stops at the master-volume headroom (no clipping)."),
     "act.off": ("自动响度未在工作", "Auto loudness is not running"),
