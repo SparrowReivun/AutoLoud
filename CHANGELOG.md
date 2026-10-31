@@ -6,6 +6,7 @@
 - Calibration is one step: set external device and master volume to ~80 %, play music you like, raise the fader from 0 to comfortable → B. The harsh-beep "ceiling A" step and all A-related logic are gone; the onset guard now starts a fixed 10 dB below B (adjustable in Settings).
 - Protection: a loud sound is now cut *fast* (0.15 s) down to B + 5 dB (adjustable), measured from the gain actually sounding, and re-corrected once the meter catches up; a cut also overrides a frozen fader hold. The notice stays 10 s, carries the comfort level B slider, and points to the dashboard for the trigger threshold, which now has its own slider there.
 - Settings are reset to the new defaults once (config_version 4); profiles and app mixer settings are kept.
+- Timing: every step and the onset guard now ramp over one block length (the "listen" setting); a B-slider move and a new work's jump share one "move" ramp (1 s); the whole-mix silence timeout that re-arms the onset guard is the same 15 s as the per-app work-silence rule (was 2 s).
 - Steady state leaves only after 2 consecutive blocks above B + trigger, or 4 consecutive blocks below B − 20 dB (all four numbers in Settings); one loud block alone no longer re-adjusts.
 - Dashboard meters read as the distance to B ("B +1.3 dB") once calibrated.
 - Settling: within 2 dB of B (adjustable) a step goes exactly to B instead of creeping by the step caps, and the dead band is now ±1 dB (was ±0.5).

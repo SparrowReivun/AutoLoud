@@ -464,11 +464,9 @@ class SettingsPage(QWidget):
             ("safety_land_db", "set.safetyland", 0, 15, 0.5),
             ("safety_hold_s", "set.safetyhold", 1, 30, 1),
             ("onset_below_b_db", "set.onset_below", 0, 30, 1),
-            ("b_shift_ramp_s", "set.bshift", 0.2, 10, 0.2),
-            ("onset_ramp_s", "set.onset_ramp", 0.2, 10, 0.1),
+            ("move_ramp_s", "set.moveramp", 0.2, 10, 0.2),
             ("onset_guard_lufs", "set.guard", -40, 0, 1),
             ("max_master_boost_db", "set.boost", 0, 40, 1),
-            ("silence_timeout_s", "set.silence", 0.5, 30, 0.5),
             ("work_silence_s", "set.worksilence", 3, 120, 1),
         ]:
             sp = QDoubleSpinBox(); sp.setRange(lo, hi); sp.setSingleStep(step); sp.setValue(getattr(P, key))

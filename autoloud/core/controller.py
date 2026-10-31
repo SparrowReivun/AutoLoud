@@ -52,11 +52,9 @@ class Phase(str, Enum):
 
 @dataclass
 class ControllerParams:
-    onset_ramp_s: float = 2.0        # (B - onset_below_b_db) -> B ramp after silence
     onset_below_b_db: float = 5.0    # the onset floor "A" is this far below B
     onset_guard_lufs: float = -10.0  # assumed loudness of an unknown new source
-    ramp_s: float = 2.0              # ramp time of every adjustment step
-    listen_s: float = 5.0            # listen this long before each decision
+    listen_s: float = 5.0            # listen this long before each decision; every step and the onset ramp take this long too
     step_up_db: float = 0.5          # max raise of the 1st step; the n-th consecutive raise may be n x this
     step_down_db: float = 2.0        # max cut per step
     deadband_db: float = 1.0         # |error| below this = comfortable
@@ -69,12 +67,11 @@ class ControllerParams:
     safety_land_db: float = 5.0      # ...which cuts the level down to B + this
     safety_ramp_s: float = 0.15      # a fast cut
     safety_hold_s: float = 10.0      # notice auto-closes after this; engine resumes us
-    b_shift_ramp_s: float = 2.0      # B slider: one smooth ramp straight to the needed gain
-    silence_timeout_s: float = 2.0   # no signal at all for this long -> IDLE
+    move_ramp_s: float = 1.0         # ramp of a B-slider move and of a new work's jump to its remembered gain
     first_time_offset_db: float = -3.0   # unknown app's new work starts this much lower
     max_master_boost_db: float = 12.0
     min_session_gain_db: float = -40.0
-    work_silence_s: float = 15.0         # per-app silence that ends a "work" (fallback rule)
+    work_silence_s: float = 15.0         # silence: per-app -> the work ended; whole mix -> IDLE (onset guard re-armed)
     work_silence_peak: float = 0.003     # near-silence threshold on the session peak meter (~-50 dBFS)
 
 
@@ -166,7 +163,7 @@ class GainController:
         elif self._block_arm_t is not None and now < self._block_arm_t:
             a["listen_in"] = self._block_arm_t - now
         if self.phase == Phase.ONSET and self._onset_t is not None:
-            a["onset"] = {"elapsed": now - self._onset_t, "total": self.params.onset_ramp_s}
+            a["onset"] = {"elapsed": now - self._onset_t, "total": self.params.listen_s}
         if self.phase == Phase.SAFETY and self._pre_safety_gain is not None:
             a["pre_safety_gain"] = self._pre_safety_gain
         return a
@@ -200,22 +197,22 @@ class GainController:
             return                      # the onset guard already handles the start
         if alone:
             if remembered_gain_db is not None:
-                self._ramp.retarget(now, self._clamp(remembered_gain_db), 0.3)
+                self._ramp.retarget(now, self._clamp(remembered_gain_db), self.params.move_ramp_s)
                 self._log(now, "new_work", mode="remembered", gain=self._ramp.end_db)
             else:
-                self._ramp.retarget(now, self._clamp(self._ramp.value(now) + self.params.first_time_offset_db), 0.3)
+                self._ramp.retarget(now, self._clamp(self._ramp.value(now) + self.params.first_time_offset_db), self.params.move_ramp_s)
                 self._log(now, "new_work", mode="first", gain=self._ramp.end_db)
         else:
             self._log(now, "new_work", mode="mixed", gain=self._ramp.end_db)
         self.phase = Phase.ADJUST
         self._up_streak, self._fresh = 0, True
-        self._arm_block(now + 0.3, meter)
+        self._arm_block(now + self.params.move_ramp_s, meter)
 
     def shift_target(self, delta_db: float, now: float, meter=None) -> None:
         """The user moved the comfort level B (dashboard slider).
 
         Not a nudge: the gain goes straight to what the new B needs, in one
-        smooth ramp of ``b_shift_ramp_s`` (no 5 s listen, no per-step limit).
+        smooth ramp of ``move_ramp_s`` (no listen, no per-step limit).
         The needed gain is estimated from the last 3 s of measurement; if
         nothing is playing the gain simply moves by ``delta_db``. The sudden
         loudness protection is held off until the ramp has landed and the
@@ -231,13 +228,13 @@ class GainController:
         if self.phase in (Phase.ADJUST, Phase.STEADY) and est is not None:
             new_gain = g_now + (T.b_lufs - est)        # one step to the needed gain
         new_gain = self._clamp(new_gain)
-        self._ramp.retarget(now, new_gain, p.b_shift_ramp_s)
+        self._ramp.retarget(now, new_gain, p.move_ramp_s)
         self._pre_safety_gain = None                   # the user has set a new level
         self._up_streak, self._fresh = 0, False
-        self._safety_guard_until = now + p.b_shift_ramp_s + 1.0   # momentary lags ~0.4 s
-        self._log(now, "b_shift", delta=delta_db, gain=new_gain, b=T.b_lufs, dur=p.b_shift_ramp_s)
+        self._safety_guard_until = now + p.move_ramp_s + 1.0   # momentary lags ~0.4 s
+        self._log(now, "b_shift", delta=delta_db, gain=new_gain, b=T.b_lufs, dur=p.move_ramp_s)
         if self.phase in (Phase.ADJUST, Phase.STEADY):
-            self._arm_block(now + p.b_shift_ramp_s, meter)
+            self._arm_block(now + p.move_ramp_s, meter)
 
     def _perceived_short_term(self, now: float) -> float | None:
         """Perceived loudness over the last 3 s *as if* the current gain had
@@ -323,7 +320,7 @@ class GainController:
             self.phase = Phase.ONSET
             self._onset_t = now
             self._log(now, "onset", a=self.a_lufs, b=T.b_lufs)
-        elif self.phase != Phase.IDLE and silent_for > p.silence_timeout_s:
+        elif self.phase != Phase.IDLE and silent_for > p.work_silence_s:
             self.enter_idle(now)
 
         target_lufs = T.b_lufs
@@ -354,7 +351,7 @@ class GainController:
                 self._block_start = self._block_arm_t = None
 
         if self.phase == Phase.ONSET:
-            f = min(1.0, (now - self._onset_t) / max(1e-3, p.onset_ramp_s))
+            f = min(1.0, (now - self._onset_t) / max(1e-3, p.listen_s))
             target_lufs = self.a_lufs + (T.b_lufs - self.a_lufs) * f
             src = self._source_est if r.momentary > ABS_GATE_LUFS else p.onset_guard_lufs
             self._ramp.retarget(now, self._clamp(min(target_lufs - src, onset_cap_db)), 0.25)
@@ -448,7 +445,7 @@ class GainController:
         self._fresh = False
         if self._pre_safety_gain is not None and g + step >= self._pre_safety_gain:
             self._pre_safety_gain = None               # back where we were: normal rules again
-        self._ramp.retarget(now, self._clamp(g + step), p.ramp_s)
-        self._log(now, "step", block=block, error=error, step=step, frm=g, to=self._ramp.end_db, dur=p.ramp_s)
+        self._ramp.retarget(now, self._clamp(g + step), p.listen_s)
+        self._log(now, "step", block=block, error=error, step=step, frm=g, to=self._ramp.end_db, dur=p.listen_s)
         self.steps_taken += 1
-        self._arm_block(now + p.ramp_s, getattr(self, "_meter", None))
+        self._arm_block(now + p.listen_s, getattr(self, "_meter", None))
