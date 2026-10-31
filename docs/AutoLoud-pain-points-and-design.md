@@ -18,7 +18,7 @@ There are two layers. The first, which exists now, is **automatic loudness**: co
 
 ## 3. Every decision in the program, in plain words
 
-**Ask your ears first, instead of applying one fixed standard.** Calibration is one step. You put the Windows master volume at 40–60 % and set the overall level with your external device, play music you like (a bundled track, or your own in any app) and slowly raise the fader from 0 until it feels comfortable — that is target B. (An earlier version also measured a "ceiling A" with a harsh beep; it was dropped: the floor is now simply B − 5 dB.) Each pair of headphones or speakers keeps its own pair, because the same digital level sounds completely different on different devices.
+**Ask your ears first, instead of applying one fixed standard.** Calibration is one step. You put your external device and the Windows master volume at about 80 %, play music you like (a bundled track, or your own in any app) and slowly raise the fader from 0 until it feels comfortable — that is target B. (An earlier version also measured a "ceiling A" with a harsh beep; it was dropped: the floor is now simply B − 5 dB.) Each pair of headphones or speakers keeps its own pair, because the same digital level sounds completely different on different devices.
 
 **We measure "how loud it sounds", not "how big the signal is".** The meter follows the loudness standard used by broadcasters and streaming services (BS.1770, in LUFS). It models how sensitive the ear is at different frequencies and automatically ignores silence and quiet passages, so a song with a soft intro is not judged "quiet overall" and pushed too loud.
 

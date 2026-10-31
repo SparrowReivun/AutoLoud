@@ -27,7 +27,7 @@ AutoLoud levels every sound on Windows to the comfortable loudness you calibrate
 
 ## Calibration
 
-One step: put the Windows master volume at 40–60 % and set your usual overall level with the external device (headphone amp / speakers / Bluetooth headset) — the further the Windows master is below 100 %, the more headroom the program has to boost quiet sources — then play music you like — a bundled track, or your own in any app (Spotify, a browser…) selected in the wizard — and slowly raise the fader from 0 to the level you find comfortable. That is your comfort level B.
+One step: set your external device (headphone amp / speakers / Bluetooth headset) and the Windows master volume to about 80 %, then play music you like — a bundled track, or your own in any app (Spotify, a browser…) selected in the wizard — and slowly raise the fader from 0 to the level you find comfortable. That is your comfort level B.
 
 Each output device keeps its own calibration. Leave the external device and the master volume alone afterwards — AutoLoud uses them as the reference; B itself can be fine-tuned any time with the dashboard slider.
 

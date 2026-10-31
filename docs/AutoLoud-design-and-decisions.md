@@ -18,7 +18,7 @@ Deliverables: a PySide6 GUI; one-click local run script; a single-file PyInstall
 
 Each headphone / speaker / Bluetooth device keeps its own calibration.
 
-1. The user puts the Windows master volume at 40–60 % and sets the overall level with the external device (the gap to 0 dB FS is the boost headroom).
+1. The user sets the external device and the Windows master volume to about 80 %.
 2. Music → B (comfort): the user plays a bundled track, or starts their own music in any app (Spotify, a browser) and selects that app in the wizard; the fader then drives that app's volume. They raise it slowly from 0 to a comfortable level.
 
 (The former step "harsh 2 kHz beep → ceiling A" was removed; the onset floor is now B − 5 dB.) B is stored as LUFS in the loopback domain, not as fader positions. The master volume at calibration time is recorded as the reference and should not be moved afterwards. The wizard also probes whether the master volume is visible in the loopback (for Bluetooth devices it usually is not), which determines whether gain estimates could drift.
