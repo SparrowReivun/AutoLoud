@@ -237,7 +237,9 @@ class DashboardPage(QWidget):
         if c is not None:
             self.k_total.setText(f"{c.total_db:+.1f} dB")
             self.k_session.setText(f"{c.session_gain_db:+.1f} dB")
-            self.k_master.setText(f"{c.master_offset_db:+.1f} dB")
+            cap = getattr(self.engine.controller, "boost_cap_db", 1e9) if self.engine.controller else 1e9
+            at_cap = c.master_offset_db >= min(cap, self.engine.config.params.max_master_boost_db) - 0.05 and c.master_offset_db > 0
+            self.k_master.setText(f"{c.master_offset_db:+.1f} dB" + ("  " + t("gain.master.cap") if at_cap else ""))
             self.k_target.setText(f"{c.target_lufs:.1f}")
             self.m_mom.set_marker("T", c.target_lufs, theme.ACCENT)
             key = {Phase.IDLE: "status.idle", Phase.ONSET: "status.onset", Phase.ADJUST: "status.adjust",
@@ -381,64 +383,6 @@ class AppsPage(QWidget):
 
 
 # ----------------------------------------------------------------------
-class SafetyNotice(QDialog):
-    """Rule 5: shown when a protection cut happens. Auto-closes after
-    ``safety_hold_s`` unless the user interacts; closing resumes adjustment."""
-
-    def __init__(self, engine: Engine, parent=None):
-        super().__init__(parent, Qt.Tool | Qt.WindowStaysOnTopHint)
-        self.engine = engine
-        self.setWindowTitle("AutoLoud")
-        self.setStyleSheet(theme.QSS)
-        self.setMinimumWidth(420)
-        lay = QVBoxLayout(self)
-        h = QLabel(t("safety.title")); h.setObjectName("h2"); lay.addWidget(h)
-        body = QLabel(t("safety.body")); body.setWordWrap(True); lay.addWidget(body)
-        self.thr_lbl = QLabel(); self.thr_lbl.setObjectName("muted"); self.thr_lbl.setWordWrap(True); lay.addWidget(self.thr_lbl)
-        row = QHBoxLayout()
-        row.addWidget(QLabel(t("dash.b")), 0)
-        self.sl = NoWheelSlider(Qt.Horizontal); self.sl.setRange(-600, 0)   # x0.1 LUFS, same as the dashboard
-        self.sl.setSingleStep(1); self.sl.setPageStep(10)
-        self.sl.valueChanged.connect(self._b_changed)
-        row.addWidget(self.sl, 1)
-        self.b_val = QLabel("—"); self.b_val.setMinimumWidth(90); row.addWidget(self.b_val, 0)
-        lay.addLayout(row)
-        hint = QLabel(t("safety.hint")); hint.setObjectName("muted"); hint.setWordWrap(True); lay.addWidget(hint)
-        self.count_lbl = QLabel(""); self.count_lbl.setObjectName("muted"); lay.addWidget(self.count_lbl)
-        btn = QPushButton(t("safety.close")); btn.setObjectName("primary"); btn.clicked.connect(self.close)
-        lay.addWidget(btn, 0, Qt.AlignRight)
-        self._timer = QTimer(self); self._timer.setSingleShot(True); self._timer.timeout.connect(self.close)
-        self._update_thr()
-
-    def _update_thr(self):
-        p = self.engine.profile; m = self.engine.config.params.safety_margin_db
-        b = p.b_lufs if p else -22.0
-        self.thr_lbl.setText(t("safety.threshold").format(b=b, m=m, v=b + m))
-
-    def _b_changed(self, v):
-        self._timer.stop()                       # the user is interacting: keep the notice open
-        self.engine.set_target_b(v / 10.0)
-        self.b_val.setText(f"{v / 10.0:.1f} LUFS")
-        self._update_thr()
-
-    def show_for(self, count: int):
-        p = self.engine.profile
-        if p is not None:
-            self.sl.blockSignals(True)
-            self.sl.setValue(int(round(p.b_lufs * 10)))
-            self.sl.blockSignals(False)
-            self.b_val.setText(f"{p.b_lufs:.1f} LUFS")
-        self._update_thr()
-        self.count_lbl.setText(t("safety.count").format(n=count, s=self.engine.config.params.safety_hold_s))
-        self._timer.start(int(self.engine.config.params.safety_hold_s * 1000))
-        self.show(); self.raise_()
-
-    def closeEvent(self, ev):
-        self._timer.stop()
-        self.engine.resume_after_safety()
-        super().closeEvent(ev)
-
-
 # ----------------------------------------------------------------------
 class SettingsPage(QWidget):
     saved = Signal()

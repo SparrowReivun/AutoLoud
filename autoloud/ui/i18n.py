@@ -63,6 +63,7 @@ _T = {
     "meter.target": ("目标", "Target"),
     "gain.session": ("应用衰减", "Session gain"),
     "gain.master": ("主音量提升", "Master boost"),
+    "gain.master.cap": ("（已到顶）", "(at the limit)"),
     "gain.total": ("总增益", "Total gain"),
     "b": ("B 舒适", "B (comfort)"),
     "recal": ("重新校准此设备", "Re-calibrate this device"),

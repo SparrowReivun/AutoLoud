@@ -255,8 +255,11 @@ class GainController:
             self._arm_block(now, meter)
 
     # ------------------------------------------------------------------
+    boost_cap_db: float = 1e9     # set by the engine: the master volume's real headroom (<= max_master_boost_db)
+
     def _clamp(self, g: float) -> float:
-        return max(self.params.min_session_gain_db, min(self.params.max_master_boost_db, g))
+        hi = min(self.params.max_master_boost_db, self.boost_cap_db)
+        return max(self.params.min_session_gain_db, min(hi, g))
 
     def _visible_gain(self, total_db: float) -> float:
         return total_db if self.targets.master_visible_in_loopback else min(0.0, total_db)

@@ -72,6 +72,7 @@ class Engine:
         self._auto_share_db = 0.0                      # 10*log10(power share of auto apps)
         self._holds: dict[str, float] = {}             # app -> bus gain frozen by a manual fader move
         self._duty: dict[str, deque] = {}              # app -> (t, sounding) samples while active (tool detector)
+        self._boost_cap = 1e9                          # master headroom above the reference, refreshed each poll
         self._events: deque = deque(maxlen=14)         # engine-level + controller events, wall clock
         self._ctl_events_seen = 0
         self._safety_count = 0
@@ -216,6 +217,7 @@ class Engine:
                     self._known_active = active
                     self._update_auto_share(sessions)
                     self._detect_tool_apps(sessions, now)
+                    self._boost_cap = self._boost_cap_db()           # one COM call per poll, not per tick
                     auto_active = [s.name for s in sessions if s.active and not s.is_self
                                    and self._follows_bus(s.name)]
                     for app_name, work in self.works.update(sessions, now):
@@ -250,6 +252,7 @@ class Engine:
                     if self.controller is not None and self.config.enabled:
                         rr = self._reading_for_auto_apps(r)
                         cap, start = self._onset_gains(sessions)
+                        self.controller.boost_cap_db = self._boost_cap
                         cmd = self.controller.update(rr, now, self.meter, self._extra_visible_db,
                                                      cap, start)
                         self._last_cmd = cmd
@@ -320,6 +323,18 @@ class Engine:
                 log.info("tool app detected: %s sounds %.0f%% of the time -> Auto off", s.name, duty * 100)
                 self._event("tool_app", app=self.config.display_name(s.name), duty=duty * 100)
                 self.mixer_changed()
+
+    def _boost_cap_db(self) -> float:
+        """How far the master volume can really be raised above the calibration
+        reference (0 dB full scale is the end of the road), so the controller
+        never asks for a boost that cannot be applied and never believes the
+        sound is louder than it is."""
+        try:
+            lo, hi = self.backend.master_range_db(self.device)
+        except Exception:
+            lo, hi = -65.0, 0.0
+        ref = self.profile.master_ref_db if self.profile is not None else 0.0
+        return max(0.0, hi - ref)
 
     def _onset_gains(self, sessions: list[AudioSession]) -> tuple[float, float | None]:
         """(cap, start) for the onset after silence.
