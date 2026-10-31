@@ -62,8 +62,10 @@ _T = {
     "meter.integrated": ("窗口积分", "Window integrated"),
     "meter.target": ("目标", "Target"),
     "gain.session": ("应用衰减", "Session gain"),
-    "gain.master": ("主音量提升", "Master boost"),
+    "gain.master": ("主音量提升 / 上限", "Master boost / limit"),
     "gain.master.cap": ("（已到顶）", "(at the limit)"),
+    "gain.master.tip": ("Windows 主音量现在是 {master:+.1f} dB，最高 0 dB，所以还能提升 {cap:.1f} dB。想要更多余量：把 Windows 主音量放低、外部设备开大，然后重新校准。",
+                        "The Windows master volume is at {master:+.1f} dB and tops out at 0 dB, so {cap:.1f} dB of boost remains. For more headroom: lower the Windows master, turn the external device up, then re-calibrate."),
     "gain.total": ("总增益", "Total gain"),
     "b": ("B 舒适", "B (comfort)"),
     "recal": ("重新校准此设备", "Re-calibrate this device"),
@@ -71,11 +73,13 @@ _T = {
     "cal.intro.h": ("准备", "Before you start"),
     "cal.intro": (
         "1. 戴好耳机 / 打开音箱，选择要校准的输出设备。\n"
-        "2. 把外部设备（耳机放大器、音箱、蓝牙耳机）和 Windows 主音量都调到 80% 左右，校准后不要再动它们。\n"
+        "2. 把 Windows 主音量放到 40%~60%，用外部设备（耳机放大器、音箱、蓝牙耳机）的音量把整体听感调到平时的水平，校准后不要再动它们。\n"
+        "   Windows 主音量离 100% 越远，程序能往上提升的余量就越大（放在 100% 就只能往下压）。\n"
         "3. 暂停其它正在播放声音的程序，否则会影响测量。\n\n"
         "接下来播放一首你喜欢的音乐，把推子从 0 慢慢拉高到你觉得舒适的听音音量——这就是全部的校准。",
         "1. Put on your headphones / turn on your speakers and pick the device to calibrate.\n"
-        "2. Set your external device (headphone amp, speakers, Bluetooth headset) and the Windows master volume to about 80 % and leave them there afterwards.\n"
+        "2. Put the Windows master volume at 40-60 % and set your usual overall level with the external device (headphone amp, speakers, Bluetooth headset); leave both alone afterwards.\n"
+        "   The further the Windows master is below 100 %, the more headroom the program has to boost quiet sources (at 100 % it can only cut).\n"
         "3. Pause anything else that is playing.\n\n"
         "Next, play a piece of music you like and slowly raise the fader from 0 to the level you find comfortable — that is the whole calibration."),
     "cal.music.h": ("舒适响度 B", "Comfort level B"),

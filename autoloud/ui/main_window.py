@@ -237,9 +237,10 @@ class DashboardPage(QWidget):
         if c is not None:
             self.k_total.setText(f"{c.total_db:+.1f} dB")
             self.k_session.setText(f"{c.session_gain_db:+.1f} dB")
-            cap = getattr(self.engine.controller, "boost_cap_db", 1e9) if self.engine.controller else 1e9
-            at_cap = c.master_offset_db >= min(cap, self.engine.config.params.max_master_boost_db) - 0.05 and c.master_offset_db > 0
-            self.k_master.setText(f"{c.master_offset_db:+.1f} dB" + ("  " + t("gain.master.cap") if at_cap else ""))
+            cap = min(s.boost_cap_db, self.engine.config.params.max_master_boost_db)
+            at_cap = c.master_offset_db > 0 and c.master_offset_db >= cap - 0.05
+            self.k_master.setText(f"{c.master_offset_db:+.1f} / {cap:+.1f} dB" + ("  " + t("gain.master.cap") if at_cap else ""))
+            self.k_master.setToolTip(t("gain.master.tip").format(master=s.master_db, cap=s.boost_cap_db))
             self.k_target.setText(f"{c.target_lufs:.1f}")
             self.m_mom.set_marker("T", c.target_lufs, theme.ACCENT)
             key = {Phase.IDLE: "status.idle", Phase.ONSET: "status.onset", Phase.ADJUST: "status.adjust",

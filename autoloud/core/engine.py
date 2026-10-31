@@ -38,6 +38,7 @@ class EngineState:
     command: GainCommand | None = None
     sessions: list[AudioSession] = field(default_factory=list)
     master_db: float = 0.0
+    boost_cap_db: float = 0.0        # how far the master can still be raised (0 dB FS minus the reference)
     works: dict[str, WorkInfo] = field(default_factory=dict)   # app name -> current work
     media_available: bool = False
     activity: dict = field(default_factory=dict)       # controller.activity(): ramp / listen progress
@@ -274,7 +275,8 @@ class Engine:
                                 enabled=self.config.enabled, activity=activity,
                                 events=list(self._events),
                                 safety_active=(cmd is not None and cmd.phase.value == "safety"),
-                                safety_count=self._safety_count)
+                                safety_count=self._safety_count,
+                                boost_cap_db=(self._boost_cap if self._boost_cap < 1e8 else 0.0))
             except Exception as e:
                 log.exception("control loop")
                 self._set_state(error=str(e))
