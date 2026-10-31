@@ -1,4 +1,4 @@
-"""Calibration wizard: beep → A, music → B."""
+"""Calibration wizard: play music, raise the fader to your comfort level → B."""
 from __future__ import annotations
 
 import logging
@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QWizard, QWizardPage, QVBoxLayout, QHBoxLayout, Q
                                QPushButton, QComboBox, QMessageBox)
 
 from autoloud.core.engine import Engine
-from autoloud.core.signals import harsh_beep, list_genres, load_audio, fallback_music
+from autoloud.core.signals import list_genres, load_audio, fallback_music
 from autoloud.ui.i18n import t
 from autoloud.ui.widgets import DbFader, LoudnessBar
 
@@ -60,7 +60,7 @@ class _PlayPage(QWizardPage):
 
     def initializePage(self):
         prof = self.engine.profile
-        self.fader.set_db(-60 + 60 * getattr(prof, self.fader_key, 0.3))
+        self.fader.set_db(-60 + 60 * getattr(prof, self.fader_key, 0.0))
         self.timer.start()
 
     def cleanupPage(self):
@@ -106,40 +106,6 @@ class _PlayPage(QWizardPage):
             return False
         setattr(self.engine.profile, self.fader_key, (self.fader.db() + 60) / 60)
         self._stop()
-        return True
-
-
-class BeepPage(_PlayPage):
-    def __init__(self, engine):
-        super().__init__(engine, t("cal.beep.h"), t("cal.beep"), "beep_fader")
-
-    def audio(self):
-        fs = self.engine.device.fs if self.engine.device else 48000
-        return harsh_beep(fs), fs
-
-    def validatePage(self):
-        if self.measured is None:
-            return False
-        a = float(self.measured)
-        # Probe how the master volume relates to the loopback tap while the
-        # beep is still playing (keeps the fader as the user left it).
-        if self.player is not None:
-            self.readout.setText("…")
-            from PySide6.QtCore import QEventLoop, QTimer as _QT
-            from PySide6.QtWidgets import QApplication
-            def wait(sec):
-                loop = QEventLoop(); _QT.singleShot(int(sec * 1000), loop.quit); loop.exec()
-            self.setEnabled(False)
-            try:
-                vis = self.engine.probe_master_visibility(wait)
-            finally:
-                self.setEnabled(True)
-            if vis is not None:
-                self.engine.profile.master_visible_in_loopback = vis
-            QApplication.processEvents()
-        if not super().validatePage():
-            return False
-        self.engine.profile.a_lufs = a
         return True
 
 
@@ -324,19 +290,30 @@ class MusicPage(_PlayPage):
             self.readout.setText(f"{v:.1f} LUFS")
         self.completeChanged.emit()
 
-    def isComplete(self) -> bool:
-        return True      # step 2 is optional: B can be set with the dashboard slider instead
-
     def validatePage(self):
+        if self.measured is None:
+            return False
+        b = float(self.measured)
+        # Probe how the master volume relates to the loopback tap while the
+        # music is still playing (keeps the fader as the user left it).
+        if self.player is not None or self._ext_key is not None:
+            self.readout.setText("…")
+            from PySide6.QtCore import QEventLoop, QTimer as _QT
+            from PySide6.QtWidgets import QApplication
+            def wait(sec):
+                loop = QEventLoop(); _QT.singleShot(int(sec * 1000), loop.quit); loop.exec()
+            self.setEnabled(False)
+            try:
+                vis = self.engine.probe_master_visibility(wait)
+            finally:
+                self.setEnabled(True)
+            if vis is not None:
+                self.engine.profile.master_visible_in_loopback = vis
+            QApplication.processEvents()
         self._stop()
         self._release_external()
-        if self.measured is None:
-            # skipped: start B a little above the ceiling A; adjust on the dashboard later
-            self.engine.profile.b_lufs = float(self.engine.profile.a_lufs + 6.0)
-            self.engine.profile.genre = ""
-            return True
         setattr(self.engine.profile, self.fader_key, (self.fader.db() + 60) / 60)
-        self.engine.profile.b_lufs = float(self.measured)
+        self.engine.profile.b_lufs = b
         d = self.source_box.currentData()
         self.engine.profile.genre = d[2] if isinstance(d, tuple) else self.source_box.currentText()
         return True
@@ -392,9 +369,8 @@ class DonePage(QWizardPage):
 
     def initializePage(self):
         p = self.engine.profile
-        gap = p.b_lufs - p.a_lufs
         self.summary.setText(
-            f"{t('a')}: {p.a_lufs:.1f} LUFS\n{t('b')}: {p.b_lufs:.1f} LUFS   (B − A = {gap:+.1f} LU)\n"
+            f"{t('b')}: {p.b_lufs:.1f} LUFS\n"
             f"{t('genre')}: {p.genre or '—'}\n"
             f"{t('cal.vis')}: {t('cal.vis.sw') if p.master_visible_in_loopback else t('cal.vis.hw')}")
 
@@ -412,14 +388,13 @@ class CalibrationWizard(QWizard):
         self.setButtonText(QWizard.CancelButton, t("cancel"))
         self.resize(720, 560)
         self.addPage(IntroPage(engine))
-        self.addPage(BeepPage(engine))
         self.addPage(MusicPage(engine, music_dir))
         self.addPage(DonePage(engine))
         self._backup = None
 
     def exec(self):
         prof = self.engine.profile
-        self._backup = (prof.a_lufs, prof.b_lufs, prof.master_ref_db, prof.calibrated, prof.genre)
+        self._backup = (prof.b_lufs, prof.master_ref_db, prof.calibrated, prof.genre)
         self.engine.begin_calibration()
         try:
             prof.master_ref_db = self.engine.backend.get_master_db(self.engine.device)
@@ -427,10 +402,8 @@ class CalibrationWizard(QWizard):
             pass
         rc = super().exec()
         if rc == QWizard.Accepted:
-            # A is normally below B (a harsh beep annoys at a lower loudness
-            # than music pleases). If not, the onset simply ramps downwards.
             prof.calibrated = True
         else:
-            prof.a_lufs, prof.b_lufs, prof.master_ref_db, prof.calibrated, prof.genre = self._backup
+            prof.b_lufs, prof.master_ref_db, prof.calibrated, prof.genre = self._backup
         self.engine.end_calibration()
         return rc

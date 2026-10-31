@@ -3,6 +3,9 @@
 ## Unreleased
 
 - Dashboard activity card: what the controller is doing right now (ramp from → to over N s, listening progress, protection hold, idle) and a log of its last decisions, for tuning the rules.
+- Calibration is one step: set external device and master volume to ~80 %, play music you like, raise the fader from 0 to comfortable → B. The harsh-beep "ceiling A" step and all A-related logic are gone; the onset guard now starts a fixed 10 dB below B (adjustable in Settings).
+- Protection: a loud sound is now cut *fast* (0.15 s) down to B + 5 dB (adjustable), measured from the gain actually sounding, and re-corrected once the meter catches up; a cut also overrides a frozen fader hold. The notice stays 10 s, carries the comfort level B slider, and points to the dashboard for the trigger threshold, which now has its own slider there.
+- Settings are reset to the new defaults once (config_version 4); profiles and app mixer settings are kept.
 - B slider: moving B now sends the gain straight to what the new B needs in one smooth ramp (2 s, adjustable in Settings) instead of the 5 s listen / 0.5 dB nudges, and the sudden-loudness protection is held off until the move has landed, so lowering B no longer pops the notice.
 
 ## 0.2.0 — 2026-10-31

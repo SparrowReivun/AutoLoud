@@ -81,6 +81,17 @@ class DashboardPage(QWidget):
         bcard.body.addLayout(brow)
         bhint = QLabel(t("dash.b.hint")); bhint.setWordWrap(True); bhint.setObjectName("muted")
         bcard.body.addWidget(bhint)
+        trow = QHBoxLayout()
+        trow.addWidget(QLabel(t("dash.thr")))
+        self.thr_slider = NoWheelSlider(Qt.Horizontal); self.thr_slider.setRange(-10, 50)   # x0.5 dB
+        self.thr_slider.setTickPosition(QSlider.TicksBelow); self.thr_slider.setTickInterval(10)
+        self.thr_slider.setValue(int(round(engine.config.params.safety_margin_db * 2)))
+        self.thr_slider.valueChanged.connect(self._thr_changed)
+        trow.addWidget(self.thr_slider, 1)
+        self.thr_val = QLabel("—"); self.thr_val.setMinimumWidth(110); trow.addWidget(self.thr_val)
+        bcard.body.addLayout(trow)
+        thint = QLabel(t("dash.thr.hint")); thint.setWordWrap(True); thint.setObjectName("muted")
+        bcard.body.addWidget(thint)
         lay.addWidget(bcard)
 
         meters = Card()
@@ -179,6 +190,16 @@ class DashboardPage(QWidget):
         self.engine.set_target_b(v / 2.0)
         self.b_val.setText(f"{v / 2.0:.1f} LUFS")
 
+    def _thr_changed(self, v):
+        self.engine.config.params.safety_margin_db = v / 2.0
+        self.engine.apply_params(); self.engine.config.save()
+        self._update_thr_label()
+
+    def _update_thr_label(self):
+        m = self.engine.config.params.safety_margin_db
+        p = self.engine.profile
+        self.thr_val.setText(f"B {m:+.1f} dB" + (f" = {p.b_lufs + m:.1f}" if p else ""))
+
     def refresh_devices(self):
         self.device_box.blockSignals(True)
         self.device_box.clear()
@@ -201,11 +222,14 @@ class DashboardPage(QWidget):
             if v != self.b_slider.value():
                 self.b_slider.blockSignals(True); self.b_slider.setValue(v); self.b_slider.blockSignals(False)
             self.b_val.setText(f"{p.b_lufs:.1f} LUFS")
+        mv = int(round(self.engine.config.params.safety_margin_db * 2))
+        if mv != self.thr_slider.value() and not self.thr_slider.isSliderDown():
+            self.thr_slider.blockSignals(True); self.thr_slider.setValue(mv); self.thr_slider.blockSignals(False)
+        self._update_thr_label()
         if p is not None and p.calibrated:
             for m in (self.m_mom, self.m_st, self.m_int):
-                m.set_marker("A", p.a_lufs, theme.WARN)
                 m.set_marker("B", p.b_lufs, theme.ACCENT2)
-            self.prof_lbl.setText(f"{t('a')} = {p.a_lufs:.1f} LUFS · {t('b')} = {p.b_lufs:.1f} LUFS · "
+            self.prof_lbl.setText(f"{t('b')} = {p.b_lufs:.1f} LUFS · "
                                   f"master ref = {p.master_ref_db:+.1f} dB · {t('genre')}: {p.genre or '—'}")
             self.uncal.hide()
         else:
@@ -367,13 +391,15 @@ class SafetyNotice(QDialog):
         lay = QVBoxLayout(self)
         h = QLabel(t("safety.title")); h.setObjectName("h2"); lay.addWidget(h)
         body = QLabel(t("safety.body")); body.setWordWrap(True); lay.addWidget(body)
-        self.thr_lbl = QLabel(); lay.addWidget(self.thr_lbl)
+        self.thr_lbl = QLabel(); self.thr_lbl.setObjectName("muted"); self.thr_lbl.setWordWrap(True); lay.addWidget(self.thr_lbl)
         row = QHBoxLayout()
-        self.sl = NoWheelSlider(Qt.Horizontal); self.sl.setRange(-10, 50)   # x0.5 dB
-        self.sl.setValue(int(round(engine.config.params.safety_margin_db * 2)))
-        self.sl.valueChanged.connect(self._thr_changed)
-        row.addWidget(QLabel("-5"), 0); row.addWidget(self.sl, 1); row.addWidget(QLabel("+25 dB"), 0)
+        row.addWidget(QLabel(t("dash.b")), 0)
+        self.sl = NoWheelSlider(Qt.Horizontal); self.sl.setRange(-120, 0)   # x0.5 LUFS, same as the dashboard
+        self.sl.valueChanged.connect(self._b_changed)
+        row.addWidget(self.sl, 1)
+        self.b_val = QLabel("—"); self.b_val.setMinimumWidth(90); row.addWidget(self.b_val, 0)
         lay.addLayout(row)
+        hint = QLabel(t("safety.hint")); hint.setObjectName("muted"); hint.setWordWrap(True); lay.addWidget(hint)
         self.count_lbl = QLabel(""); self.count_lbl.setObjectName("muted"); lay.addWidget(self.count_lbl)
         btn = QPushButton(t("safety.close")); btn.setObjectName("primary"); btn.clicked.connect(self.close)
         lay.addWidget(btn, 0, Qt.AlignRight)
@@ -385,17 +411,21 @@ class SafetyNotice(QDialog):
         b = p.b_lufs if p else -22.0
         self.thr_lbl.setText(t("safety.threshold").format(b=b, m=m, v=b + m))
 
-    def _thr_changed(self, v):
+    def _b_changed(self, v):
         self._timer.stop()                       # the user is interacting: keep the notice open
-        self.engine.config.params.safety_margin_db = v / 2.0
-        self.engine.apply_params(); self._update_thr(); self.engine.config.save()
+        self.engine.set_target_b(v / 2.0)
+        self.b_val.setText(f"{v / 2.0:.1f} LUFS")
+        self._update_thr()
 
     def show_for(self, count: int):
-        self.sl.blockSignals(True)
-        self.sl.setValue(int(round(self.engine.config.params.safety_margin_db * 2)))
-        self.sl.blockSignals(False)
+        p = self.engine.profile
+        if p is not None:
+            self.sl.blockSignals(True)
+            self.sl.setValue(int(round(p.b_lufs * 2)))
+            self.sl.blockSignals(False)
+            self.b_val.setText(f"{p.b_lufs:.1f} LUFS")
         self._update_thr()
-        self.count_lbl.setText(t("safety.count").format(n=count))
+        self.count_lbl.setText(t("safety.count").format(n=count, s=self.engine.config.params.safety_hold_s))
         self._timer.start(int(self.engine.config.params.safety_hold_s * 1000))
         self.show(); self.raise_()
 
@@ -427,7 +457,9 @@ class SettingsPage(QWidget):
             ("deadband_db", "set.deadband", 0.1, 3, 0.1),
             ("steady_trigger_db", "set.steadytrig", 1, 15, 0.5),
             ("safety_margin_db", "set.safety", -5, 25, 0.5),
+            ("safety_land_db", "set.safetyland", 0, 15, 0.5),
             ("safety_hold_s", "set.safetyhold", 1, 30, 1),
+            ("onset_below_b_db", "set.onset_below", 0, 30, 1),
             ("b_shift_ramp_s", "set.bshift", 0.2, 10, 0.2),
             ("onset_ramp_s", "set.onset_ramp", 0.2, 10, 0.1),
             ("onset_guard_lufs", "set.guard", -40, 0, 1),

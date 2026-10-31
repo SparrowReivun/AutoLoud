@@ -52,7 +52,8 @@ class Phase(str, Enum):
 
 @dataclass
 class ControllerParams:
-    onset_ramp_s: float = 2.0        # A -> B ramp after silence
+    onset_ramp_s: float = 2.0        # (B - onset_below_b_db) -> B ramp after silence
+    onset_below_b_db: float = 10.0   # the onset floor "A" is this far below B
     onset_guard_lufs: float = -10.0  # assumed loudness of an unknown new source
     ramp_s: float = 2.0              # ramp time of every adjustment step
     listen_s: float = 5.0            # listen this long before each decision
@@ -61,9 +62,9 @@ class ControllerParams:
     deadband_db: float = 0.5         # |error| below this = comfortable
     steady_trigger_db: float = 5.0   # a 5 s block above B + this restarts adjusting
     safety_margin_db: float = 10.0   # momentary above B + this = protection cut
-    safety_ramp_s: float = 0.3
-    safety_hysteresis_db: float = 1.5  # cut the excess plus this, so the level does not sit on the trigger
-    safety_hold_s: float = 5.0       # notice auto-closes after this; engine resumes us
+    safety_land_db: float = 5.0      # ...which cuts the level down to B + this
+    safety_ramp_s: float = 0.15      # a fast cut
+    safety_hold_s: float = 10.0      # notice auto-closes after this; engine resumes us
     b_shift_ramp_s: float = 2.0      # B slider: one smooth ramp straight to the needed gain
     silence_timeout_s: float = 2.0   # no signal at all for this long -> IDLE
     first_time_offset_db: float = -3.0   # unknown app's new work starts this much lower
@@ -75,7 +76,6 @@ class ControllerParams:
 
 @dataclass
 class Targets:
-    a_lufs: float = -30.0
     b_lufs: float = -22.0
     master_ref_db: float = 0.0
     master_visible_in_loopback: bool = False
@@ -165,15 +165,20 @@ class GainController:
 
     def enter_idle(self, now: float) -> None:
         if self.phase != Phase.IDLE:
-            self._log(now, "idle", gain=self._clamp(self.targets.a_lufs - self.params.onset_guard_lufs))
+            self._log(now, "idle", gain=self._clamp(self.a_lufs - self.params.onset_guard_lufs))
         self.phase = Phase.IDLE
-        g = self.targets.a_lufs - self.params.onset_guard_lufs
+        g = self.a_lufs - self.params.onset_guard_lufs
         self._ramp.retarget(now, self._clamp(g), 0.0)
         self._source_est = MIN_LUFS
         self._block_start = self._block_arm_t = None
 
     def retune(self, targets: Targets) -> None:
         self.targets = targets
+
+    @property
+    def a_lufs(self) -> float:
+        """The onset floor: a fixed distance below B (no separate calibration)."""
+        return self.targets.b_lufs - self.params.onset_below_b_db
 
     def notify_new_work(self, now: float, meter=None, remembered_gain_db: float | None = None,
                         alone: bool = True) -> None:
@@ -303,7 +308,7 @@ class GainController:
         if self.phase == Phase.IDLE and r.has_signal:
             self.phase = Phase.ONSET
             self._onset_t = now
-            self._log(now, "onset", a=T.a_lufs, b=T.b_lufs)
+            self._log(now, "onset", a=self.a_lufs, b=T.b_lufs)
         elif self.phase != Phase.IDLE and silent_for > p.silence_timeout_s:
             self.enter_idle(now)
 
@@ -312,25 +317,30 @@ class GainController:
 
         # ---- rule 4: sudden loudness, always ---------------------------------
         if self.phase in (Phase.ADJUST, Phase.STEADY, Phase.SAFETY) and r.has_signal:
-            excess = perceived_now - (T.b_lufs + p.safety_margin_db)
+            # trigger at B + margin; once cutting, keep correcting until the
+            # level really sits at B + land (the momentary meter lags the jump)
+            over = p.safety_margin_db if self.phase != Phase.SAFETY else p.safety_land_db + 1.0
+            excess = perceived_now - (T.b_lufs + over)
             settled = self.phase != Phase.SAFETY or (
                 self._ramp.done(now) and now - (self._safety_t or 0.0) > p.safety_ramp_s + 0.5)
             settled = settled and now >= self._safety_guard_until   # a B shift is still landing
             if excess > 0 and settled:   # momentary lags ~0.4 s: let the cut show before cutting again
-                self._ramp.retarget(now, self._clamp(self._ramp.end_db - excess - p.safety_hysteresis_db),
-                                    p.safety_ramp_s)
+                # cut from the gain that is *sounding now* (not a ramp's end point)
+                # down to B + safety_land_db, fast
+                cut = perceived_now - (T.b_lufs + p.safety_land_db)
+                self._ramp.retarget(now, self._clamp(g_now - cut), p.safety_ramp_s)
                 if self.phase != Phase.SAFETY:
                     safety_now = True
                     self._pre_safety_gain = g_now
                 self._log(now, "safety", perceived=perceived_now, excess=excess,
-                          cut=excess + p.safety_hysteresis_db, gain=self._ramp.end_db)
+                          cut=cut, gain=self._ramp.end_db)
                 self.phase = Phase.SAFETY
                 self._safety_t = now
                 self._block_start = self._block_arm_t = None
 
         if self.phase == Phase.ONSET:
             f = min(1.0, (now - self._onset_t) / max(1e-3, p.onset_ramp_s))
-            target_lufs = T.a_lufs + (T.b_lufs - T.a_lufs) * f
+            target_lufs = self.a_lufs + (T.b_lufs - self.a_lufs) * f
             src = self._source_est if r.momentary > ABS_GATE_LUFS else p.onset_guard_lufs
             self._ramp.retarget(now, self._clamp(target_lufs - src), 0.25)
             if f >= 1.0:

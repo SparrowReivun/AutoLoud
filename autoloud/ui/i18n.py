@@ -23,8 +23,8 @@ _T = {
     "act.off": ("自动响度未在工作", "Auto loudness is not running"),
     "act.ramp": ("正在调整：{frm:+.1f} → {to:+.1f} dB（{d:+.1f} dB，{dur:.1f} s 内，还剩 {left:.1f} s）",
                  "Adjusting: {frm:+.1f} → {to:+.1f} dB ({d:+.1f} dB over {dur:.1f} s, {left:.1f} s left)"),
-    "act.onset": ("起始保护：目标从 A 升向 B，{el:.1f} / {tot:.0f} s，当前增益 {g:+.1f} dB",
-                  "Onset guard: target rising A → B, {el:.1f} / {tot:.0f} s, gain {g:+.1f} dB"),
+    "act.onset": ("起始保护：目标从 B−10 升到 B，{el:.1f} / {tot:.0f} s，当前增益 {g:+.1f} dB",
+                  "Onset guard: target rising B−10 → B, {el:.1f} / {tot:.0f} s, gain {g:+.1f} dB"),
     "act.listen": ("在听：{el:.1f} / {tot:.0f} s，这段到目前 {lufs:.1f} LUFS，增益保持 {g:+.1f} dB",
                    "Listening: {el:.1f} / {tot:.0f} s, this block so far {lufs:.1f} LUFS, gain held at {g:+.1f} dB"),
     "act.listen_steady": ("稳定，只看不动：{el:.1f} / {tot:.0f} s，这段到目前 {lufs:.1f} LUFS，增益 {g:+.1f} dB",
@@ -32,16 +32,16 @@ _T = {
     "act.listen_in": ("等渐变结束再听，{sec:.1f} s 后开始，增益 {g:+.1f} dB", "Waiting for the ramp to finish, listening starts in {sec:.1f} s, gain {g:+.1f} dB"),
     "act.safety": ("响度过高保护：压在 {g:+.1f} dB（压低前 {pre:+.1f} dB），等提示关闭后重新微调",
                    "Loudness protection: held at {g:+.1f} dB (was {pre:+.1f} dB), re-adjusts when the notice closes"),
-    "act.idle": ("待机：没有声音，增益预置在 {g:+.1f} dB，保证突现的大音量最多只有 A 响",
-                 "Idle: no sound, gain parked at {g:+.1f} dB so a sudden loud source lands on A"),
-    "ev.onset": ("有声音了，起始保护：从 A ({a:.1f}) 升向 B ({b:.1f})", "Sound started, onset guard: A ({a:.1f}) → B ({b:.1f})"),
+    "act.idle": ("待机：没有声音，增益预置在 {g:+.1f} dB，保证突现的大音量最多只有 B−10 响",
+                 "Idle: no sound, gain parked at {g:+.1f} dB so a sudden loud source lands 10 dB under B"),
+    "ev.onset": ("有声音了，起始保护：从 {a:.1f} 升到 B ({b:.1f})", "Sound started, onset guard: {a:.1f} → B ({b:.1f})"),
     "ev.idle": ("安静下来，回到待机，增益预置 {gain:+.1f} dB", "Quiet, back to idle, gain parked at {gain:+.1f} dB"),
     "ev.step": ("听完 5 s：{block:.1f} LUFS，{error:+.1f} dB → 调 {step:+.1f} dB（{frm:+.1f} → {to:+.1f}，{dur:.0f} s）",
                 "Listened 5 s: {block:.1f} LUFS, {error:+.1f} dB → step {step:+.1f} dB ({frm:+.1f} → {to:+.1f}, {dur:.0f} s)"),
     "ev.steady": ("听完 5 s：{block:.1f} LUFS，离 B 只差 {error:+.1f} dB → 舒适，停止调整", "Listened 5 s: {block:.1f} LUFS, {error:+.1f} dB from B → comfortable, stop"),
     "ev.watch": ("稳定中看了 5 s：{block:.1f} LUFS（{error:+.1f}），不动", "Steady, watched 5 s: {block:.1f} LUFS ({error:+.1f}), no change"),
     "ev.readjust": ("整段 5 s 太响：{block:.1f} LUFS，超过 B {over:.1f} dB → 重新调整", "Whole 5 s too loud: {block:.1f} LUFS, {over:.1f} dB over B → re-adjust"),
-    "ev.safety": ("保护！瞬时 {perceived:.1f} LUFS，超阈值 {excess:.1f} dB → 压低 {cut:.1f} dB 到 {gain:+.1f} dB",
+    "ev.safety": ("保护！瞬时 {perceived:.1f} LUFS，超阈值 {excess:.1f} dB → 急速压低 {cut:.1f} dB 到 {gain:+.1f} dB（落到 B+5）",
                   "Protection! momentary {perceived:.1f} LUFS, {excess:.1f} dB over → cut {cut:.1f} dB to {gain:+.1f} dB"),
     "ev.resume": ("提示已关闭，从 {gain:+.1f} dB 重新微调", "Notice closed, re-adjusting from {gain:+.1f} dB"),
     "ev.new_work": ("新作品：{mode} → 增益 {gain:+.1f} dB，开始听", "New work: {mode} → gain {gain:+.1f} dB, listening"),
@@ -61,35 +61,25 @@ _T = {
     "gain.session": ("应用衰减", "Session gain"),
     "gain.master": ("主音量提升", "Master boost"),
     "gain.total": ("总增益", "Total gain"),
-    "a": ("A 下限", "A (floor)"),
     "b": ("B 舒适", "B (comfort)"),
     "recal": ("重新校准此设备", "Re-calibrate this device"),
     "cal.title": ("校准向导", "Calibration wizard"),
     "cal.intro.h": ("准备", "Before you start"),
     "cal.intro": (
         "1. 戴好耳机 / 打开音箱，选择要校准的输出设备。\n"
-        "2. 把 Windows 主音量调到你平时的较高位置（建议 70%~100%），校准期间不要再动它。\n"
+        "2. 把外部设备（耳机放大器、音箱、蓝牙耳机）和 Windows 主音量都调到 80% 左右，校准后不要再动它们。\n"
         "3. 暂停其它正在播放声音的程序，否则会影响测量。\n\n"
-        "校准会先播放一段刺耳的提示音，让你找到「吵但还能忍受」的响度上限 A；\n"
-        "然后播放你选择风格的音乐，让你找到「舒适」的响度 B。",
+        "接下来播放一首你喜欢的音乐，把推子从 0 慢慢拉高到你觉得舒适的听音音量——这就是全部的校准。",
         "1. Put on your headphones / turn on your speakers and pick the device to calibrate.\n"
-        "2. Set the Windows master volume to your usual high position (70–100 %) and leave it alone.\n"
+        "2. Set your external device (headphone amp, speakers, Bluetooth headset) and the Windows master volume to about 80 % and leave them there afterwards.\n"
         "3. Pause anything else that is playing.\n\n"
-        "First a harsh beep lets you find the loudest level you can tolerate (A);\n"
-        "then music of your chosen genre lets you find your comfortable level (B)."),
-    "cal.beep.h": ("第 1 步 · 响度上限 A", "Step 1 · Loudness ceiling A"),
-    "cal.beep": (
-        "点击播放，然后把推子从 0 慢慢往上拉，直到声音「吵但可以心平气和地忍受」。\n"
-        "这个值会成为所有新声音事件的起始上限：任何突然出现的声音都不会比它更响。",
-        "Press play, then slowly raise the fader from 0 until the beep is loud but still tolerable.\n"
-        "Every new sound event will start no louder than this."),
-    "cal.music.h": ("第 2 步 · 舒适响度 B", "Step 2 · Comfort level B"),
+        "Next, play a piece of music you like and slowly raise the fader from 0 to the level you find comfortable — that is the whole calibration."),
+    "cal.music.h": ("舒适响度 B", "Comfort level B"),
     "cal.music": (
-        "选择来源并播放，把推子调到最舒适的听音响度。\n"
-        "这一步可以跳过：直接点「下一步」，之后在总览页用「舒适响度 B」滑块边听边定。",
-        "Pick a source, play it and set the fader to the level you enjoy.\n"
-        "This step is optional: press Next and set B later with the dashboard slider while listening to anything.\n"
-        "Every source will be levelled to this loudness."),
+        "选择来源并播放，把推子从 0 慢慢拉高，停在你觉得舒适的听音音量。\n"
+        "之后所有声音都会被拉平到这个响度；随时可以在总览页用「舒适响度 B」滑块微调。",
+        "Pick a source, play it, and slowly raise the fader from 0 until the level feels comfortable.\n"
+        "Every sound will then be levelled to this loudness; you can fine-tune it any time with the dashboard's \u201cComfort level B\u201d slider."),
     "cal.source": ("来源", "Source"),
     "cal.source.hint": ("可以选内置曲目，也可以先用任意应用（Spotify、浏览器…）播放你自己的音乐，再在这里选中它；推子会直接控制那个应用的音量。",
                         "Pick a bundled track, or start your own music in any app (Spotify, a browser...) and select it here; the fader then drives that app's volume."),
@@ -134,14 +124,20 @@ _T = {
     "set.deadband": ("算作「已舒适」的误差 (±dB)", "Comfortable within (±dB)"),
     "set.steadytrig": ("稳定后整段 5 秒超过 B 多少才重调 (dB)", "Re-adjust when a 5 s block exceeds B by (dB)"),
     "set.safetyhold": ("保护提示自动关闭 (s)", "Protection notice auto-closes after (s)"),
+    "set.safetyland": ("保护触发后压到 B + 多少 (dB)", "Protection cuts down to B + (dB)"),
+    "set.onset_below": ("起始保护从 B 以下多少 dB 开始", "Onset guard starts this far below B (dB)"),
+    "dash.thr": ("音量过大触发阈值", "Loud-sound trigger"),
+    "dash.thr.hint": ("瞬时响度超过「B + 这个值」就触发保护，急速压到 B + 5 dB 并弹出提示。觉得提示过于频繁就把它调大。",
+                      "Protection fires when the momentary loudness exceeds B + this, cuts fast to B + 5 dB and shows a notice. Raise it if the notice appears too often."),
     "set.bshift": ("调整 B 时的平滑时间 (s)", "Smoothing time when B is moved (s)"),
     "safety.title": ("识别到巨大音量，已自动进入响度过高保护", "Very loud sound detected — loudness protection engaged"),
-    "safety.body": ("已把超出的部分压下去。如果觉得保护过于频繁，请调大保护阈值。", "The excess has been cut. If this happens too often, raise the protection threshold."),
+    "safety.body": ("已急速把音量压到舒适响度 B + 5 dB。觉得还是太响或太轻，可以在这里直接调整 B：", "The level has been cut fast to comfort level B + 5 dB. Still too loud or too quiet? Adjust B right here:"),
+    "safety.hint": ("如果这个提示出现得过于频繁，请到应用首页调大「音量过大触发阈值」。", "If this notice appears too often, raise the \u201cLoud-sound trigger\u201d on the dashboard."),
     "safety.threshold": ("当前阈值：你的听音偏好 B ({b:.1f} LUFS) + {m:.1f} dB = {v:.1f} LUFS", "Threshold: your comfort level B ({b:.1f} LUFS) + {m:.1f} dB = {v:.1f} LUFS"),
-    "safety.count": ("本次运行第 {n} 次触发 · 5 秒内无操作自动关闭并从当前音量重新调整", "Cut #{n} this run · closes after 5 s without interaction, then re-adjusts from here"),
+    "safety.count": ("本次运行第 {n} 次触发 · {s:.0f} 秒内无操作自动关闭并从当前音量重新调整", "Cut #{n} this run · closes after {s:.0f} s without interaction, then re-adjusts from here"),
     "safety.close": ("知道了", "OK"),
     "set.ramp": ("渐变时间 (s)", "Ramp time (s)"),
-    "set.onset_ramp": ("起始 A→B 渐变 (s)", "Onset A→B ramp (s)"),
+    "set.onset_ramp": ("起始保护渐变到 B 的时间 (s)", "Onset guard ramp to B (s)"),
     "set.window": ("分析窗口 (s)", "Analysis window (s)"),
     "set.first_window": ("起始后首个窗口 (s)", "First window after onset (s)"),
     "set.guard": ("起始保护假设响度 (LUFS)", "Onset guard assumed loudness (LUFS)"),

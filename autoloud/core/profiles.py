@@ -25,16 +25,14 @@ class DeviceProfile:
     device_id: str
     device_name: str
     calibrated: bool = False
-    a_lufs: float = -32.0
     b_lufs: float = -22.0
     master_ref_db: float = -12.0
     genre: str = ""
     master_visible_in_loopback: bool = False
-    beep_fader: float = 0.3      # UI fader positions, remembered for re-calibration
-    music_fader: float = 0.5
+    music_fader: float = 0.0     # UI fader position, remembered for re-calibration (0 = bottom)
 
     def targets(self) -> Targets:
-        return Targets(a_lufs=self.a_lufs, b_lufs=self.b_lufs, master_ref_db=self.master_ref_db,
+        return Targets(b_lufs=self.b_lufs, master_ref_db=self.master_ref_db,
                        master_visible_in_loopback=self.master_visible_in_loopback)
 
 
@@ -56,7 +54,7 @@ class AppConfig:
     music_dir: str = ""           # folder with <genre>/*.wav|mp3|flac for calibration
     start_minimized: bool = False
     language: str = "zh"
-    config_version: int = 3       # bump when ControllerParams defaults change
+    config_version: int = 4       # bump when ControllerParams defaults change
     mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
 

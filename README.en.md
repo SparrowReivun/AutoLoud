@@ -14,22 +14,19 @@ AutoLoud levels every sound on Windows to the comfortable loudness you calibrate
 
 ## What it does
 
-- **Onset guard**: when sound appears after silence, playback starts at your ceiling A and ramps to your comfort level B over 2 s. A sudden loud notification never blasts you.
+- **Onset guard**: when sound appears after silence, playback starts 10 dB under your comfort level B and ramps up to B over 2 s. A sudden loud notification never blasts you.
 - **Listen, then nudge**: after that, every 5 s of listening leads to one decision: too quiet → up by at most 0.5 dB, too loud → down by at most 2 dB, each over 2 s; within B ± 0.5 dB it stops.
 - **Comfortable means hands off**: quiet dialogue, interludes and fade-outs are left alone; only a whole 5 s block above B + 5 dB restarts the adjustment.
 - **New work, fresh start**: a track or video change (system media info, or sound after 15 s of silence) starts from the gain that app had last time, then nudges from there.
-- **Sudden loudness**: momentary loudness above B + 10 dB (adjustable) is cut by the excess within 0.3 s and a notice appears; it closes after 5 s without interaction, then the fine adjustment resumes from there.
+- **Sudden loudness**: momentary loudness above B + 10 dB (adjustable on the dashboard) is cut fast down to B + 5 dB and a notice appears (with a B slider right in it); it closes after 10 s without interaction, then the fine adjustment resumes from there.
 - **Per-app mixer**: every app that produces sound gets a fader (mute to +15 dB) and an "Auto" switch, active even when the bus auto loudness is off; a fader above 0 dB is realised by raising the master and pulling the other apps down.
 - **Restores everything**: on exit all app volumes and the master volume return to where they were.
 
 ## Calibration
 
-| Step | You | Result |
-| --- | --- | --- |
-| 1 · Beep | Raise the fader from 0 until a harsh 2 kHz beep is loud but still tolerable | Ceiling A |
-| 2 · Music | Play a bundled track, or start your own music in any app and select it; set the fader to a comfortable level | Comfort B |
+One step: set your external device (headphone amp / speakers / Bluetooth headset) and the Windows master volume to about 80 %, then play music you like — a bundled track, or your own in any app (Spotify, a browser…) selected in the wizard — and slowly raise the fader from 0 to the level you find comfortable. That is your comfort level B.
 
-Each output device keeps its own calibration. Keep the Windows master volume at your usual high position during calibration and leave it there afterwards — AutoLoud uses it as the reference.
+Each output device keeps its own calibration. Leave the external device and the master volume alone afterwards — AutoLoud uses them as the reference; B itself can be fine-tuned any time with the dashboard slider.
 
 ## Run from source / build
 

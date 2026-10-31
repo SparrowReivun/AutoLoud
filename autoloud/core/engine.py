@@ -18,7 +18,7 @@ from typing import Callable
 import numpy as np
 
 from autoloud.backends.base import AudioSession, Backend, OutputDevice
-from autoloud.core.controller import GainCommand, GainController
+from autoloud.core.controller import GainCommand, GainController, Phase
 from autoloud.core.profiles import AppConfig, DeviceProfile
 from autoloud.dsp.loudness import LoudnessReading, MIN_LUFS, StreamingLoudnessMeter
 from autoloud.core.works import WorkTracker, WorkInfo
@@ -328,7 +328,7 @@ class Engine:
         p = self.profile
         p.master_ref_db += delta
         if p.master_visible_in_loopback:      # loopback moved too: targets move with it
-            p.a_lufs += delta; p.b_lufs += delta
+            p.b_lufs += delta
         self._applied_master_db = master_db
         if self.controller is not None:
             self.controller.retune(p.targets())
@@ -385,6 +385,8 @@ class Engine:
             off = mix.offset_db if mix else 0.0
             if s.name in self._holds:
                 base = self._holds[s.name] if cmd is not None else 0.0
+                if cmd is not None and cmd.phase == Phase.SAFETY and self._follows_bus(s.name):
+                    base = min(base, G)     # a protection cut overrides a frozen fader hold
             else:
                 base = G if (cmd is not None and self._follows_bus(s.name)) else 0.0
             desired[s.key] = base + off

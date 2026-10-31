@@ -36,7 +36,7 @@ def run_sim(source_lufs_fn, seconds, targets, params=None, master_visible=False,
     return log
 
 
-T = lambda: Targets(a_lufs=-32, b_lufs=-22)
+T = lambda: Targets(b_lufs=-22)
 
 
 def test_onset_from_silence_is_held_near_A_then_reaches_B():
@@ -97,9 +97,11 @@ def test_safety_cuts_only_the_excess_and_holds():
     after = [c for t, p, c in log if t > 4.0]
     assert all(c.phase == Phase.SAFETY for c in after)
     g = after[-1].total_db
-    assert -6.0 <= g <= -2.5, g                           # ~ -(3 + 1.5) dB, not back to B (-13)
-    # perceived after the cut ~ B + 10 - 1.5
-    assert abs(log[-1][1] - (-13.5)) < 1.5
+    assert -9.5 <= g <= -6.5, g                           # source B+13 -> land on B+5: ~ -8 dB, not back to B (-13)
+    # perceived after the cut ~ B + 5, and it gets there fast (< 0.5 s after the trigger)
+    assert abs(log[-1][1] - (-17.0)) < 1.5
+    landed = [t for t, p, c in log if t > trig[0] and c.total_db < -6.5]
+    assert landed and landed[0] - trig[0] < 1.0, landed[:1]      # first cut in 0.15 s, touch-up once the meter catches up
 
 
 def test_resume_after_safety_readjusts_to_B():
@@ -176,7 +178,7 @@ def test_b_slider_moves_gain_in_one_ramp_without_protection():
         if t == 0.0:
             ctl.phase = Phase.STEADY; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
         if abs(t - 6.0) < 1e-9:
-            ctl.retune(Targets(a_lufs=-47, b_lufs=-37)); ctl.shift_target(-15.0, t, meter)
+            ctl.retune(Targets(b_lufs=-37)); ctl.shift_target(-15.0, t, meter)
     log = run_sim(lambda t: -22.0, 16.0, T(), hook=hook)
     assert not any(c.safety_triggered for t, p, c in log)
     assert all(c.phase != Phase.SAFETY for t, p, c in log)

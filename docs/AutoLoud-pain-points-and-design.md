@@ -18,13 +18,13 @@ There are two layers. The first, which exists now, is **automatic loudness**: co
 
 ## 3. Every decision in the program, in plain words
 
-**Ask your ears first, instead of applying one fixed standard.** Calibration has two steps. A harsh beep plays and you raise the fader to "loud but tolerable" — that is ceiling A. Then music plays (a bundled track, or your own in any app) and you set it to comfortable — that is target B. Each pair of headphones or speakers keeps its own pair, because the same digital level sounds completely different on different devices.
+**Ask your ears first, instead of applying one fixed standard.** Calibration is one step. You put your external device and the Windows master volume at about 80 %, play music you like (a bundled track, or your own in any app) and slowly raise the fader from 0 until it feels comfortable — that is target B. (An earlier version also measured a "ceiling A" with a harsh beep; it was dropped: the floor is now simply B − 10 dB.) Each pair of headphones or speakers keeps its own pair, because the same digital level sounds completely different on different devices.
 
 **We measure "how loud it sounds", not "how big the signal is".** The meter follows the loudness standard used by broadcasters and streaming services (BS.1770, in LUFS). It models how sensitive the ear is at different frequencies and automatically ignores silence and quiet passages, so a song with a soft intro is not judged "quiet overall" and pushed too loud.
 
 **Don't touch the audio itself; turn the volume knobs.** The program takes a copy of what is playing from Windows for measurement, then adjusts each application's volume and the master volume. No driver, no added latency, the audio path is untouched. The trade-off is that millisecond-level peak limiting is impossible, so sudden loud sounds are handled by the rules below.
 
-**The first sound after silence: better too quiet than too loud.** While nothing is playing, the program parks the volume at a conservative position: even a very loud ringtone will not exceed ceiling A. Once sound appears, it measures how loud the source really is and smoothly raises it to around target B over two seconds.
+**The first sound after silence: better too quiet than too loud.** While nothing is playing, the program parks the volume at a conservative position: even a very loud ringtone will not exceed B − 10 dB. Once sound appears, it measures how loud the source really is and smoothly raises it to around target B over two seconds.
 
 **What counts as a new work, and starting over.** When the player reports track or video changes (title / artist / album in the system media session), follow them; pause, resume, seeking and artwork updates do not count. Without that, an app that has been near-silent for 15 s and then sounds again has started a new work. A new work begins at the gain that app had last time; an app heard for the first time starts a little quiet (3 dB below the current gain).
 
@@ -32,7 +32,7 @@ There are two layers. The first, which exists now, is **automatic loudness**: co
 
 **Once comfortable, stop chasing.** Quiet dialogue, interludes and fade-outs are left to get quieter; a climax may get louder. Only when a whole 5 s block is above B + 5 dB does the adjustment start again, with the same method, until the level is back near B.
 
-**Sudden loudness.** This rule is always active, no 5 s wait. Momentary loudness above B + 10 dB (threshold adjustable in the notice, −5 to +25 dB) is cut within 0.3 s, by the excess plus a small margin (B + 13 → about 3 dB plus 1.5 dB so the level does not sit on the trigger), never straight back to B. The program hears first and then cuts, so the first instant of a blast cannot be taken back.
+**Sudden loudness.** This rule is always active, no 5 s wait. Momentary loudness above B + 10 dB (threshold adjustable on the dashboard, −5 to +25 dB) is cut fast, within 0.15 s, down to B + 5 dB — from the gain actually sounding at that moment — and touched up once the meter has caught up; never straight back to B. The notice stays for 10 s and carries the comfort level B slider. The program hears first and then cuts, so the first instant of a blast cannot be taken back.
 
 **After a cut, no bouncing back.** The cut is applied at once and a notice appears: very loud sound detected, protection engaged; if this happens too often, raise the threshold — a fader on the notice changes it directly. The notice closes after 5 s without interaction, and the program re-adjusts from the current level with "listen, nudge, listen". One relief: if the loud passage is over and the sound is now clearly too quiet, the way back up to the pre-cut gain may use the larger 2 dB steps, otherwise one ad would leave a film whispering for minutes.
 

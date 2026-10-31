@@ -1,4 +1,4 @@
-"""Calibration signals: the "harsh beep" and the music library loader."""
+"""Calibration signals: the music library loader (and a synthetic fallback)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,30 +14,6 @@ def assets_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys._MEIPASS) / "assets"  # type: ignore[attr-defined]
     return Path(__file__).resolve().parents[2] / "assets"
-
-
-def harsh_beep(fs: int = 48000, seconds: float = 2.0, level_dbfs: float = -6.0) -> np.ndarray:
-    """A piercing 2000 Hz sine beep train (150 ms on / 150 ms off).
-
-    Peak level is ``level_dbfs``; this is the reference digital level of the
-    stimulus, the user's fader scales it during calibration.
-    """
-    t = np.arange(int(fs * seconds)) / fs
-    tone = np.sin(2 * np.pi * 2000.0 * t)
-    period, on = 0.30, 0.15
-    env = ((t % period) < on).astype(np.float64)
-    # 5 ms raised-cosine edges on each burst to avoid clicks
-    ramp = int(0.005 * fs)
-    edges = np.flatnonzero(np.diff(env) != 0) + 1
-    fade = 0.5 * (1 - np.cos(np.linspace(0, np.pi, ramp)))
-    for e in edges:
-        if env[e] > 0:      # rising edge
-            env[e:e + ramp] = fade[: len(env[e:e + ramp])]
-        else:               # falling edge
-            env[e - ramp:e] = fade[::-1][: len(env[e - ramp:e])]
-    x = tone * env
-    x *= 10 ** (level_dbfs / 20)
-    return np.stack([x, x], axis=1).astype(np.float32)
 
 
 def default_music_dir() -> Path:

@@ -18,14 +18,14 @@ Deliverables: a PySide6 GUI; one-click local run script; a single-file PyInstall
 
 Each headphone / speaker / Bluetooth device keeps its own calibration.
 
-1. Beep → A (ceiling): a harsh 2 kHz sine pulse train plays; the user raises the fader from 0 until it is "loud but still tolerable".
-2. Music → B (comfort): the user plays a bundled track, or starts their own music in any app (Spotify, a browser) and selects that app in the wizard; the fader then drives that app's volume. They set it to a comfortable level.
+1. The user sets the external device and the Windows master volume to about 80 %.
+2. Music → B (comfort): the user plays a bundled track, or starts their own music in any app (Spotify, a browser) and selects that app in the wizard; the fader then drives that app's volume. They raise it slowly from 0 to a comfortable level.
 
-A and B are stored as LUFS in the loopback domain, not as fader positions. The master volume at calibration time is recorded as the reference and should not be moved afterwards. The wizard also probes whether the master volume is visible in the loopback (for Bluetooth devices it usually is not), which determines whether gain estimates could drift.
+(The former step "harsh 2 kHz beep → ceiling A" was removed; the onset floor is now B − 10 dB.) B is stored as LUFS in the loopback domain, not as fader positions. The master volume at calibration time is recorded as the reference and should not be moved afterwards. The wizard also probes whether the master volume is visible in the loopback (for Bluetooth devices it usually is not), which determines whether gain estimates could drift.
 
 ## 4. Runtime logic (revised)
 
-**Onset guard**: triggers only when sound appears after complete silence. The target starts at A and ramps to B over 2 s while the source loudness is estimated online. A sudden loud notification is never louder than A.
+**Onset guard**: triggers only when sound appears after complete silence. The target starts at B − 10 dB and ramps to B over 2 s while the source loudness is estimated online. A sudden loud notification is never louder than B − 10 dB.
 
 **New source while audio is already playing**: no return to A (that would be audibly discontinuous) and no special handling; the next window recomputation takes care of it. The original idea of "one adjustment per song/video if the source can be identified" is not feasible yet — we can identify the process, not the track.
 
