@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-10-31
 
 - Defaults are now the author's tuned values (listen 5 s, +1 / −0.8 dB steps, ±2 dB dead band, steady re-adjust after 2 loud blocks over B + 6 or 3 quiet blocks under B − 20, protection at B + 13 → B + 5, 1.8 s moves).
 - One exe for both languages: on first run the UI follows the Windows display language (Chinese → 中文, otherwise English); switch any time in Settings. The separate English build is no longer needed.
