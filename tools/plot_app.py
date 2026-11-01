@@ -5,7 +5,7 @@
     python tools/plot_app.py ZenlessZoneZero.exe --csv-dir "C:\\Users\\me\\AppData\\Roaming\\AutoLoud"
 
 Reads apps-<ts>.csv and meters-<ts>.csv from the AutoLoud config folder and
-writes <app>-<ts>.png next to them, three panels over the same time axis:
+writes <app>-<ts>.png into the current folder, three panels over the same time axis:
 
   1. the app's own peak meter (Windows IAudioMeterInformation, as dBFS) and
      the session volume AutoLoud gave it;
@@ -39,7 +39,7 @@ def main() -> int:
     ap.add_argument("app", help="process name as shown in the mixer, e.g. ZenlessZoneZero.exe")
     ap.add_argument("run", nargs="?", help="run timestamp YYYYMMDD-HHMMSS (default: latest)")
     ap.add_argument("--csv-dir", help="folder with the meters-/apps-*.csv files (default: config folder)")
-    ap.add_argument("--out", help="output PNG (default: <app>-<run>.png in the csv folder)")
+    ap.add_argument("--out", help="output PNG (default: <app>-<run>.png in the current folder)")
     a = ap.parse_args()
 
     folder = Path(a.csv_dir) if a.csv_dir else config_dir()
@@ -92,9 +92,9 @@ def main() -> int:
     import matplotlib.dates as mdates
     ax3.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
     fig.autofmt_xdate(); fig.tight_layout()
-    out = Path(a.out) if a.out else folder / f"{a.app}-{run}.png"
+    out = Path(a.out) if a.out else Path.cwd() / f"{a.app}-{run}.png"
     fig.savefig(out, dpi=120)
-    print("wrote", out)
+    print("wrote", out.resolve())
     return 0
 
 
