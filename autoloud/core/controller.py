@@ -408,13 +408,13 @@ class GainController:
                 if block is not None and (self._over_blocks >= p.steady_over_blocks
                                           or self._under_blocks >= p.steady_under_blocks):
                     self.phase = Phase.ADJUST
-                    self._log(now, "readjust", block=block, over=block - T.b_lufs,
+                    self._log(now, "readjust", block=block, over=block - T.b_lufs, gain=self._ramp.end_db,
                               blocks=self._over_blocks or self._under_blocks)
                     self._over_blocks = self._under_blocks = 0
                     self._decide(now, r)          # this block counts as the first listen
                 else:
                     if block is not None:
-                        self._log(now, "watch", block=block, rel=block - T.b_lufs,
+                        self._log(now, "watch", block=block, rel=block - T.b_lufs, gain=self._ramp.end_db,
                                   over_n=self._over_blocks, under_n=self._under_blocks)
                     self._arm_block(now, meter)    # keep watching, do not chase
 
@@ -456,7 +456,7 @@ class GainController:
             self.phase = Phase.STEADY
             self._up_streak, self._fresh = 0, False
             self._over_blocks = self._under_blocks = 0
-            self._log(now, "steady", block=block, rel=-error)
+            self._log(now, "steady", block=block, rel=-error, gain=self._ramp.end_db)
             self._arm_block(now, getattr(self, "_meter", None))
             return
         g = self._ramp.end_db
