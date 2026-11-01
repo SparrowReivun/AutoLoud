@@ -2,6 +2,8 @@
 
 ## 0.3.0 — 2026-10-31
 
+- Parameter presets: the Settings page keeps named sets of all control parameters (new / rename / delete / switch); changes are stored in the active preset.
+- Adjustment log: every decision the dashboard shows is also written, in the same words plus the apps sounding at that moment, to `adjust-<timestamp>.log` in the config folder (one file per launch, kept 14 days).
 - On start the Windows master volume is set to 40 % (Settings, 0 = leave it) and taken as the calibration reference, so there is boost headroom every session.
 - Dashboard meters and the listening line now show the perceived loudness (loopback plus the master boost the loopback cannot see), matching the decision log; the B slider bottom mutes.
 - The "comfortable" dead band is now asymmetric: up to 3 dB above B and up to 8 dB below B (two settings) count as comfortable.

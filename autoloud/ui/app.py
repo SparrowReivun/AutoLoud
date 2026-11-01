@@ -61,8 +61,12 @@ def main(argv=None) -> int:
         except Exception:
             pass
 
-    from autoloud.ui.main_window import MainWindow
+    from autoloud.ui.main_window import MainWindow, DashboardPage
     win = MainWindow(engine)
+    # every decision, in the dashboard's words, into adjust-<timestamp>.log
+    from autoloud.core.adjustlog import AdjustLog
+    adjust_log = AdjustLog(config_dir(), DashboardPage._fmt_event)
+    engine.on_event = adjust_log
     win.start()
     # volume keys / knob move B instead of the Windows master volume (Windows only)
     from autoloud.backends.volumekeys_windows import VolumeKeys
@@ -78,6 +82,7 @@ def main(argv=None) -> int:
     rc = app.exec()
     volkeys.stop()
     engine.stop()
+    adjust_log.close()
     try:
         backend.close()
     except Exception:

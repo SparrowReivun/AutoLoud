@@ -73,6 +73,10 @@ Windows 音频引擎 ──► 各应用会话混音 ──► WASAPI loopback �
 - 自动混音（通话优先、音乐让路）将建立在现有的每应用偏移之上。
 - 按曲目 / 视频识别来源（Windows Media Session API），切歌时重置分析窗。
 
+## 日志
+
+`%APPDATA%\AutoLoud\` 下：`autoloud.log` 是运行日志；`adjust-<时间>.log` 是每次运行的音量决策记录，和首页活动卡片同样的措辞，每行附当时在发声的应用（不含音量），保留 14 天。
+
 ## 许可
 
 [CC BY-NC 4.0](LICENSE) — 可自由使用、修改、分享，须署名，禁止商用。内置示例曲目 `McG-pro1` 仅供校准演示。

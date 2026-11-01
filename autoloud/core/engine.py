@@ -76,6 +76,7 @@ class Engine:
         self._holds: dict[str, float] = {}             # app -> bus gain frozen by a manual fader move
         self._duty: dict[str, deque] = {}              # app -> (t, sounding) samples while active (tool detector)
         self._boost_cap = 1e9                          # master headroom above the reference, refreshed each poll
+        self._last_sessions: list[AudioSession] = []
         self._events: deque = deque(maxlen=14)         # engine-level + controller events, wall clock
         self._ctl_events_seen = 0
         self._safety_count = 0
@@ -227,6 +228,7 @@ class Engine:
                 if now >= next_poll:
                     next_poll = now + self.SESSION_POLL_S
                     sessions = self.backend.list_sessions(self.device)
+                    self._last_sessions = sessions
                     active = {s.key for s in sessions if s.active and not s.is_self}
                     self._known_active = active
                     self._update_auto_share(sessions)
@@ -296,14 +298,35 @@ class Engine:
             if dt > 0:
                 time.sleep(dt)
 
+    on_event = None      # optional sink(wall_time, kind, data, sounding_apps) -> None, e.g. the adjustment log
+
+    def _sounding_apps(self) -> list[str]:
+        """Short description of the apps making sound right now (no volumes)."""
+        out = []
+        for s in self._last_sessions:
+            if s.is_self or not s.active or s.peak <= 0.001:
+                continue
+            w = self.works.all_current().get(s.name)
+            lab = (w.label() or f"#{w.index}") if w is not None else ""
+            out.append(self.config.display_name(s.name) + (f" ({lab})" if lab else ""))
+        return out
+
+    def _emit(self, when: float, kind: str, data: dict) -> None:
+        self._events.append((when, kind, data))
+        if self.on_event is not None:
+            try:
+                self.on_event(when, kind, data, self._sounding_apps())
+            except Exception:
+                log.exception("event sink")
+
     def _event(self, kind: str, **data) -> None:
-        self._events.append((time.time(), kind, data))
+        self._emit(time.time(), kind, data)
 
     def _drain_controller_events(self, now: float) -> None:
         for seq, t_mono, kind, data in list(self.controller.events):
             if seq > self._ctl_events_seen:
                 self._ctl_events_seen = seq
-                self._events.append((time.time() - (now - t_mono), kind, dict(data)))
+                self._emit(time.time() - (now - t_mono), kind, dict(data))
 
     def _detect_tool_apps(self, sessions: list[AudioSession], now: float) -> None:
         """An app whose session stays active but which actually sounds less

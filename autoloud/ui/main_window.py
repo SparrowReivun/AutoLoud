@@ -7,7 +7,7 @@ from PySide6.QtGui import QAction, QIcon, QPixmap, QPainter, QColor
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton,
                                QComboBox, QCheckBox, QStackedWidget, QDoubleSpinBox, QFormLayout,
                                QLineEdit, QFileDialog, QSystemTrayIcon, QMenu, QScrollArea, QSlider,
-                               QProgressBar, QApplication, QMessageBox, QDialog)
+                               QProgressBar, QApplication, QMessageBox, QDialog, QInputDialog)
 
 from autoloud.core.engine import Engine, EngineState
 from autoloud.core.controller import Phase
@@ -404,6 +404,21 @@ class SettingsPage(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
         h = QLabel(t("nav.settings")); h.setObjectName("h1"); lay.addWidget(h)
+        # ---- parameter presets ------------------------------------------
+        pcard = Card()
+        prow = QHBoxLayout()
+        prow.addWidget(QLabel(t("preset.label")))
+        self.preset_box = QComboBox(); self.preset_box.setMinimumWidth(220)
+        prow.addWidget(self.preset_box, 1)
+        for key, slot in (("preset.new", self._preset_new), ("preset.rename", self._preset_rename),
+                          ("preset.delete", self._preset_delete)):
+            b = QPushButton(t(key)); b.clicked.connect(slot); prow.addWidget(b)
+        pcard.body.addLayout(prow)
+        phint = QLabel(t("preset.hint")); phint.setObjectName("muted"); phint.setWordWrap(True)
+        pcard.body.addWidget(phint)
+        lay.addWidget(pcard)
+        self._fill_presets()
+        self.preset_box.currentTextChanged.connect(self._preset_switched)
         card = Card()
         form = QFormLayout()
         self.spins = {}
@@ -475,11 +490,66 @@ class SettingsPage(QWidget):
             self.music_dir.setText(d); self._changed()
 
     def showEvent(self, ev):
-        # the dashboard sliders (B, loud-sound trigger) change params too: show the live values
+        self._reload_spins()
+        super().showEvent(ev)
+
+    def _reload_spins(self):
+        # the dashboard sliders (B, loud-sound trigger) and preset switches change params too
         P = self.engine.config.params
         for k, sp in self.spins.items():
             sp.blockSignals(True); sp.setValue(getattr(P, k)); sp.blockSignals(False)
-        super().showEvent(ev)
+
+    # ---- presets ------------------------------------------------------------
+    def _fill_presets(self):
+        cfg = self.engine.config
+        cfg.ensure_presets()
+        self.preset_box.blockSignals(True)
+        self.preset_box.clear()
+        for name in cfg.presets:
+            self.preset_box.addItem(name)
+        self.preset_box.setCurrentText(cfg.active_preset)
+        self.preset_box.blockSignals(False)
+
+    def _preset_switched(self, name: str):
+        cfg = self.engine.config
+        if not name or name == cfg.active_preset:
+            return
+        cfg.switch_preset(name)
+        self.engine.apply_params()
+        self._reload_spins()
+        cfg.save()
+        self.status.setText(t("preset.switched").format(name=name))
+
+    def _preset_new(self):
+        cfg = self.engine.config
+        name, ok = QInputDialog.getText(self, t("preset.new"), t("preset.name_prompt"),
+                                        text=t("preset.default_name").format(n=len(cfg.presets) + 1))
+        name = (name or "").strip()
+        if not ok or not name or name in cfg.presets:
+            return
+        cfg.add_preset(name)          # a copy of the current values, now the active one
+        self._fill_presets(); cfg.save()
+        self.status.setText(t("preset.created").format(name=name))
+
+    def _preset_rename(self):
+        cfg = self.engine.config
+        old = cfg.active_preset
+        name, ok = QInputDialog.getText(self, t("preset.rename"), t("preset.name_prompt"), text=old)
+        name = (name or "").strip()
+        if not ok or not name or name == old or name in cfg.presets:
+            return
+        cfg.rename_preset(old, name)
+        self._fill_presets(); cfg.save()
+
+    def _preset_delete(self):
+        cfg = self.engine.config
+        if len(cfg.presets) <= 1:
+            return
+        name = cfg.active_preset
+        if QMessageBox.question(self, t("preset.delete"), t("preset.delete_confirm").format(name=name)) != QMessageBox.Yes:
+            return
+        cfg.delete_preset(name)
+        self.engine.apply_params(); self._reload_spins(); self._fill_presets(); cfg.save()
 
     def _changed(self, *_a):
         self.status.setText(t("set.saving"))
