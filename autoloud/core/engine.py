@@ -77,6 +77,9 @@ class Engine:
         self._duty: dict[str, deque] = {}              # app -> (t, sounding) samples while active (tool detector)
         self._boost_cap = 1e9                          # master headroom above the reference, refreshed each poll
         self._last_sessions: list[AudioSession] = []
+        self._sound_since: dict[str, float] = {}        # app -> when it started sounding (this stretch)
+        self._sound_last: dict[str, float] = {}         # app -> last time it was sounding
+        self._app_cut: dict[str, float] = {}            # app -> transient attenuation for a loud intrusion (dB > 0)
         self._events: deque = deque(maxlen=14)         # engine-level + controller events, wall clock
         self._ctl_events_seen = 0
         self._safety_count = 0
@@ -230,6 +233,15 @@ class Engine:
                     next_poll = now + self.SESSION_POLL_S
                     sessions = self.backend.list_sessions(self.device)
                     self._last_sessions = sessions
+                    for s in self._sounding(sessions):
+                        if now - self._sound_last.get(s.name, -1e9) > 1.0:
+                            self._sound_since[s.name] = now          # a new stretch of sound
+                        self._sound_last[s.name] = now
+                    for name in list(self._app_cut):                 # intrusion over: let the app back up
+                        if now - self._sound_last.get(name, -1e9) > 2.0:
+                            self._app_cut.pop(name, None)
+                            self._event("app_cut_end", app=self.config.display_name(name))
+                            self.mixer_changed()
                     active = {s.key for s in sessions if s.active and not s.is_self}
                     self._known_active = active
                     self._update_auto_share(sessions)
@@ -277,7 +289,7 @@ class Engine:
                         if cmd.safety_triggered:
                             self._safety_count += 1
                             log.info("safety cut #%d: perceived %.1f LUFS", self._safety_count, cmd.perceived_lufs)
-                            self._strong_after_cut(sessions, cmd)
+                            self._attribute_cut(sessions, cmd, now)
                     self._apply(cmd, sessions)
                 if getattr(self, "_dirty", False) and now - getattr(self, "_last_save", 0.0) > 5.0:
                     self._dirty = False; self._last_save = now
@@ -384,6 +396,27 @@ class Engine:
         if mix.peak_src_lufs is None or src > mix.peak_src_lufs + 0.1:
             mix.peak_src_lufs = round(src, 1)
             self._dirty = True
+
+    def _attribute_cut(self, sessions: list[AudioSession], cmd: GainCommand, now: float) -> None:
+        """A protection cut fired. If the loud sound is an *intrusion* - an app
+        that started sounding in the last second while another app was
+        already playing - the bus cut is undone and that app alone is pulled
+        down by the same amount (until it stops sounding; permanently if it is
+        in strong mode). Otherwise (the playing content itself got loud) the
+        bus cut stands, and a strong-mode app is still pulled down."""
+        snd = self._sounding(sessions)
+        new = [s for s in snd if now - self._sound_since.get(s.name, -1e9) < 1.2]
+        old = [s for s in snd if s.name not in {n.name for n in new}]
+        if new and old and self.controller is not None:
+            undone = self.controller.move_cut_to_app(now, self.meter)
+            cut = max(undone, 0.0)
+            if cut > 0.1:
+                for s in new:
+                    self._app_cut[s.name] = round(self._app_cut.get(s.name, 0.0) + cut, 1)
+                    log.info("loud intrusion from %s: bus cut undone, app cut %.1f dB", s.name, self._app_cut[s.name])
+                    self._event("app_cut", app=self.config.display_name(s.name), cut=self._app_cut[s.name])
+                self.mixer_changed()
+        self._strong_after_cut(sessions, cmd)
 
     def _strong_after_cut(self, sessions: list[AudioSession], cmd: GainCommand) -> None:
         """A protection cut fired: if the loudest app is in strong mode, its
@@ -573,7 +606,7 @@ class Engine:
                     base = min(base, G)     # a protection cut overrides a frozen fader hold
             else:
                 base = G if (cmd is not None and self._follows_bus(s.name)) else 0.0
-            desired[s.key] = base + off
+            desired[s.key] = base + off - self._app_cut.get(s.name, 0.0)
         active_desired = [desired[s.key] for s in apps if s.active] or [G]
         P = max(0.0, max(active_desired))
         try:

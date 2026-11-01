@@ -243,6 +243,22 @@ class GainController:
         return (r.short_term - self._mean_gain(now, 3.0)
                 + self._visible_gain(g) + self._last_extra + self._hidden_gain(g))
 
+    def move_cut_to_app(self, now: float, meter=None) -> float:
+        """The engine found that the loud sound came from an app other than
+        the one(s) already playing (a notification over music): the bus gain
+        goes back to where it was and the engine puts the cut on that app
+        alone. Returns the cut that was undone (dB)."""
+        if self.phase != Phase.SAFETY or self._pre_safety_gain is None:
+            return 0.0
+        undone = self._pre_safety_gain - self._ramp.end_db
+        self._ramp.retarget(now, self._clamp(self._pre_safety_gain), self.params.safety_ramp_s)
+        self._pre_safety_gain = None
+        self._safety_guard_until = now + self.params.safety_ramp_s + 0.8   # let the app cut show first
+        self.phase = Phase.ADJUST
+        self._log(now, "cut_moved", gain=self._ramp.end_db, undone=undone)
+        self._arm_block(now + self.params.safety_ramp_s, meter)
+        return undone
+
     def resume_after_safety(self, now: float, meter=None) -> None:
         """The protection notice closed: re-adjust from the current gain."""
         if self.phase == Phase.SAFETY:
