@@ -224,8 +224,10 @@ class Engine:
                     sessions = self.backend.list_sessions(self.device)
                     self._last_sessions = sessions
                     if self.meter_log is not None:
+                        sole, sm, ss = self.source_loudness(sessions, r, self._last_cmd)
                         self.meter_log.apps(sessions, self._last_cmd.total_db if self._last_cmd else 0.0,
-                                            {k: v.offset_db for k, v in self.config.apps.items()})
+                                            {k: v.offset_db for k, v in self.config.apps.items()},
+                                            sole, sm, ss)
                     self._startup_master()
                     for s in self._sounding(sessions):
                         if now - self._sound_last.get(s.name, -1e9) > 1.0:
@@ -299,8 +301,10 @@ class Engine:
                     activity = self.controller.activity(now)
                     self._drain_controller_events(now)
                 if self.meter_log is not None:
+                    snd = self._sounding(sessions)
                     self.meter_log.meters(r, cmd, self.profile.b_lufs if self.profile else 0.0,
-                                          getattr(self, "_last_master_db", 0.0), now)
+                                          getattr(self, "_last_master_db", 0.0), now,
+                                          snd[0].name if len(snd) == 1 else "")
                 self._set_state(reading=r, command=cmd, calibrating=self._calibrating,
                                 enabled=self.config.enabled, activity=activity,
                                 events=list(self._events), error="",
@@ -402,6 +406,25 @@ class Engine:
 
     def _sounding(self, sessions: list[AudioSession]) -> list[AudioSession]:
         return [s for s in sessions if s.active and not s.is_self and s.peak > 0.01]
+
+    def source_loudness(self, sessions: list[AudioSession], r, cmd: GainCommand | None
+                        ) -> tuple[str, float | None, float | None]:
+        """The loudness of the one app that is sounding, with every gain taken
+        out: (app name, momentary, short-term) as the app would measure at
+        100 % session volume and the reference master. The loopback measures
+        the whole mix after the session volumes, so this is exact only when
+        exactly one app sounds; otherwise ("", None, None)."""
+        snd = self._sounding(sessions)
+        if len(snd) != 1 or cmd is None or r.short_term <= -90:
+            return "", None, None
+        s = snd[0]
+        vol_db = 20.0 * math.log10(max(s.volume, 1e-6))
+        # loopback = source + session volume (+ master, only if the master is in the loopback)
+        seen_master = cmd.master_offset_db if (self.profile is not None and
+                                               self.profile.master_visible_in_loopback) else 0.0
+        return (s.name,
+                r.momentary - seen_master - vol_db if r.momentary > -90 else None,
+                r.short_term - seen_master - vol_db)
 
     def _track_peaks(self, sessions: list[AudioSession], cmd: GainCommand) -> None:
         """When exactly one app is sounding, what we hear is that app alone:

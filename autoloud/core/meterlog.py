@@ -3,12 +3,19 @@ as CSV, one pair of files per launch in the config folder. Never pruned.
 
 ``meters-<ts>.csv``  one row every 100 ms (the meter hop):
     time, momentary_lufs, short_term_lufs, integrated_lufs, peak_dbfs,
-    gain_total_db, session_gain_db, master_boost_db, phase, b_lufs, master_db
+    gain_total_db, session_gain_db, master_boost_db, phase, b_lufs, master_db,
+    sole_app
     (loudness columns are the raw loopback values; add master_boost_db to get
-    what the dashboard shows when the master is not in the loopback)
+    what the dashboard shows when the master is not in the loopback; sole_app
+    is the one app sounding at that moment, blank when none or several)
 
 ``apps-<ts>.csv``  one row per sounding-or-active app per session poll (0.5 s):
-    time, app, key, active, peak, volume, bus_gain_db, fader_db
+    time, app, key, active, peak, volume, bus_gain_db, fader_db,
+    src_momentary_lufs, src_short_lufs
+    (the src_ columns are the app's own loudness with every gain taken out -
+    what it would measure at 100 % session volume and the reference master -
+    filled only when it is the only app sounding, since the loopback measures
+    the whole mix)
 """
 from __future__ import annotations
 
@@ -28,8 +35,9 @@ class MeterLog:
         self._fm = open(folder / f"meters-{ts}.csv", "a", encoding="utf-8")
         self._fa = open(folder / f"apps-{ts}.csv", "a", encoding="utf-8")
         self._fm.write("time,momentary_lufs,short_term_lufs,integrated_lufs,peak_dbfs,"
-                       "gain_total_db,session_gain_db,master_boost_db,phase,b_lufs,master_db\n")
-        self._fa.write("time,app,key,active,peak,volume,bus_gain_db,fader_db\n")
+                       "gain_total_db,session_gain_db,master_boost_db,phase,b_lufs,master_db,sole_app\n")
+        self._fa.write("time,app,key,active,peak,volume,bus_gain_db,fader_db,"
+                       "src_momentary_lufs,src_short_lufs\n")
         self._last_flush = time.time()
         self._last_meter_row = 0.0
 
@@ -38,7 +46,7 @@ class MeterLog:
         t = time.time()
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t)) + f".{int((t % 1) * 1000):03d}"
 
-    def meters(self, r, cmd, b_lufs: float, master_db: float, now: float) -> None:
+    def meters(self, r, cmd, b_lufs: float, master_db: float, now: float, sole_app: str = "") -> None:
         """Called every control tick; writes at most one row per 100 ms."""
         if now - self._last_meter_row < 0.1:
             return
@@ -49,12 +57,13 @@ class MeterLog:
             else:
                 g = ",,,"
             self._fm.write(f"{self._ts()},{r.momentary:.2f},{r.short_term:.2f},{r.integrated:.2f},"
-                           f"{r.peak_dbfs:.2f},{g},{b_lufs:.2f},{master_db:.2f}\n")
+                           f"{r.peak_dbfs:.2f},{g},{b_lufs:.2f},{master_db:.2f},{sole_app.replace(',', ' ')}\n")
             self._maybe_flush()
         except Exception:
             log.exception("meter log")
 
-    def apps(self, sessions, bus_gain_db: float, faders: dict) -> None:
+    def apps(self, sessions, bus_gain_db: float, faders: dict,
+             sole_app: str = "", src_momentary: float | None = None, src_short: float | None = None) -> None:
         """Called every session poll."""
         try:
             ts = self._ts()
@@ -62,8 +71,13 @@ class MeterLog:
                 if s.is_self or not (s.active or s.peak > 0.001):
                     continue
                 name = s.name.replace(",", " ")
+                src = ""
+                if s.name == sole_app and src_short is not None and src_momentary is not None:
+                    src = f"{src_momentary:.2f},{src_short:.2f}"
+                else:
+                    src = ","
                 self._fa.write(f"{ts},{name},{s.key},{int(s.active)},{s.peak:.4f},{s.volume:.3f},"
-                               f"{bus_gain_db:.2f},{faders.get(s.name, 0.0):.1f}\n")
+                               f"{bus_gain_db:.2f},{faders.get(s.name, 0.0):.1f},{src}\n")
             self._maybe_flush()
         except Exception:
             log.exception("app log")

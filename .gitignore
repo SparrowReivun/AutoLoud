@@ -12,3 +12,5 @@ assets/music/*
 !assets/music/default/
 assets/music/default/*
 !assets/music/default/McG-pro1.flac
+# plot_app.py output in the project root
+/*.png
