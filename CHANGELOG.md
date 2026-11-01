@@ -2,6 +2,8 @@
 
 ## 0.3.0 — 2026-10-31
 
+- Remembered gains are only taken from clean moments (steady, or adjusting with no protection cut in the last 20 s); gains bent by a cut were being replayed as the start point of the next sound. All remembered gains are forgotten once on this upgrade.
+- The startup master-volume set now happens after the first successful session query (the two Core Audio hangs seen so far were right after it).
 - Robustness: if a Core Audio call hangs (the audio service stops answering, e.g. around a device change or a stalled app), the COM worker thread is abandoned and a fresh one takes over with fresh objects, instead of every later call timing out; a single app whose volume call times out is skipped for that tick.
 - Intrusions are cut per app: when the protection fires because an app that just started sounding barged in over content that was already playing (a notification over music), the bus cut is undone and only that app is pulled down by the same amount, until it goes quiet (for good if it is in strong mode). The music no longer drops with every ding.
 - Modes instead of switches: the bus auto loudness is always on and the dashboard picks which parameter preset ("mode") it runs with; the per-app "Auto" tick is replaced by "strong mode" (peaks must stay 5 dB under B: fader to −10 dB or lower from the app's recorded peak, pulled further down on every protection cut it still trips). Tool apps are still detected and tagged.

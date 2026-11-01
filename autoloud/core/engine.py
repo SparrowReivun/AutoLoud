@@ -80,6 +80,7 @@ class Engine:
         self._sound_since: dict[str, float] = {}        # app -> when it started sounding (this stretch)
         self._sound_last: dict[str, float] = {}         # app -> last time it was sounding
         self._app_cut: dict[str, float] = {}            # app -> transient attenuation for a loud intrusion (dB > 0)
+        self._last_safety_t = -1e9
         self._events: deque = deque(maxlen=14)         # engine-level + controller events, wall clock
         self._ctl_events_seen = 0
         self._safety_count = 0
@@ -135,17 +136,6 @@ class Engine:
         self.profile = self.config.profile_for(device.id, device.name)
         self.config.selected_device_id = device.id
         self.config.enabled = True            # the bus is always on; "modes" are presets
-        pct = self.config.startup_master_percent
-        if pct > 0 and not getattr(self, "_startup_master_done", False):
-            # once per launch: park the Windows master at a known position so there is
-            # boost headroom, and make it the calibration reference
-            self._startup_master_done = True
-            try:
-                self.backend.set_master_scalar(device, max(0.0, min(1.0, pct / 100.0)))
-                self.profile.master_ref_db = self.backend.get_master_db(device)
-                log.info("startup: master volume set to %.0f%% (%.1f dB) and taken as the reference", pct, self.profile.master_ref_db)
-            except Exception:
-                log.exception("startup master volume")
         try:
             fs, ch = self.backend.start_capture(device, self._on_audio, block_ms=20)
         except Exception as e:
@@ -233,6 +223,7 @@ class Engine:
                     next_poll = now + self.SESSION_POLL_S
                     sessions = self.backend.list_sessions(self.device)
                     self._last_sessions = sessions
+                    self._startup_master()
                     for s in self._sounding(sessions):
                         if now - self._sound_last.get(s.name, -1e9) > 1.0:
                             self._sound_since[s.name] = now          # a new stretch of sound
@@ -260,8 +251,10 @@ class Engine:
                             self.controller.notify_new_work(now, self.meter, mix.last_gain_db)
                     # remember the bus gain every sounding auto app has (latest value wins, so a
                     # work that ends before settling still leaves its best estimate)
-                    if (self._last_cmd is not None and self._last_cmd.phase.value in ("adjust", "steady")
-                            and self.config.enabled):
+                    clean = (self._last_cmd is not None and self.config.enabled and (
+                        self._last_cmd.phase.value == "steady" or
+                        (self._last_cmd.phase.value == "adjust" and now - self._last_safety_t > 20.0)))
+                    if clean:                      # never a gain still bent by a protection cut
                         for name in auto_active:
                             mix = self.config.mix_for(name)
                             if mix.last_gain_db is None or abs(mix.last_gain_db - self._last_cmd.total_db) > 0.25:
@@ -287,6 +280,7 @@ class Engine:
                         self._last_cmd = cmd
                         self._track_peaks(sessions, cmd)
                         if cmd.safety_triggered:
+                            self._last_safety_t = now
                             self._safety_count += 1
                             log.info("safety cut #%d: perceived %.1f LUFS", self._safety_count, cmd.perceived_lufs)
                             self._attribute_cut(sessions, cmd, now)
@@ -375,6 +369,22 @@ class Engine:
                 log.info("tool app detected: %s sounds %.0f%% of the time -> Auto off", s.name, duty * 100)
                 self._event("tool_app", app=self.config.display_name(s.name), duty=duty * 100)
                 self.mixer_changed()
+
+    def _startup_master(self) -> None:
+        """Once per launch, after the audio service has answered our first
+        session query: park the Windows master at the configured position so
+        there is boost headroom, and make it the calibration reference."""
+        pct = self.config.startup_master_percent
+        if pct <= 0 or getattr(self, "_startup_master_done", False) or self.profile is None:
+            return
+        self._startup_master_done = True
+        try:
+            self.backend.set_master_scalar(self.device, max(0.0, min(1.0, pct / 100.0)))
+            self.profile.master_ref_db = self.backend.get_master_db(self.device)
+            self._applied_master_db = None
+            log.info("startup: master volume set to %.0f%% (%.1f dB) and taken as the reference", pct, self.profile.master_ref_db)
+        except Exception:
+            log.exception("startup master volume")
 
     # ---- strong mode --------------------------------------------------------
     STRONG_FADER_DB = -10.0       # default fader for an app switched to strong mode

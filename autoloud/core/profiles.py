@@ -90,6 +90,7 @@ class AppConfig:
     volume_key_step_db: float = 1.0
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
+    memory_version: int = 2       # bump to forget every app's remembered gain once
     mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
 
@@ -122,8 +123,11 @@ class AppConfig:
                 cfg.params = params_from_dict(pr)
             # else: older config -> keep the new defaults for params
             cfg.mixer_range_db = float(raw.get("mixer_range_db", 40.0))
+            forget = int(raw.get("memory_version", 1)) < cfg.memory_version
             for k, v in raw.get("apps", {}).items():
                 cfg.apps[k] = AppMix(**{kk: vv for kk, vv in v.items() if kk in AppMix.__dataclass_fields__})
+                if forget:                                  # old memories were bent by protection cuts
+                    cfg.apps[k].last_gain_db = None
             for k, v in raw.get("profiles", {}).items():
                 cfg.profiles[k] = DeviceProfile(**{kk: vv for kk, vv in v.items()
                                                    if kk in DeviceProfile.__dataclass_fields__})
@@ -147,6 +151,7 @@ class AppConfig:
             "volume_key_step_db": self.volume_key_step_db,
             "language": self.language,
             "config_version": self.config_version,
+            "memory_version": self.memory_version,
             "params": asdict(self.params),
             "profiles": {k: asdict(v) for k, v in self.profiles.items()},
             "mixer_range_db": self.mixer_range_db,
