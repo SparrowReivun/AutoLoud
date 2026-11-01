@@ -67,6 +67,8 @@ def main(argv=None) -> int:
     from autoloud.core.adjustlog import AdjustLog
     adjust_log = AdjustLog(config_dir(), DashboardPage._fmt_event)
     engine.on_event = adjust_log
+    from autoloud.core.meterlog import MeterLog
+    engine.meter_log = MeterLog(config_dir())          # raw measurements, meters-/apps-<ts>.csv
     win.start()
     # volume keys / knob move B instead of the Windows master volume (Windows only)
     from autoloud.backends.volumekeys_windows import VolumeKeys
@@ -83,6 +85,7 @@ def main(argv=None) -> int:
     volkeys.stop()
     engine.stop()
     adjust_log.close()
+    engine.meter_log.close()
     try:
         backend.close()
     except Exception:

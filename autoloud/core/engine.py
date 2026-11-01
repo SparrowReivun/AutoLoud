@@ -223,6 +223,9 @@ class Engine:
                     next_poll = now + self.SESSION_POLL_S
                     sessions = self.backend.list_sessions(self.device)
                     self._last_sessions = sessions
+                    if self.meter_log is not None:
+                        self.meter_log.apps(sessions, self._last_cmd.total_db if self._last_cmd else 0.0,
+                                            {k: v.offset_db for k, v in self.config.apps.items()})
                     self._startup_master()
                     for s in self._sounding(sessions):
                         if now - self._sound_last.get(s.name, -1e9) > 1.0:
@@ -264,6 +267,7 @@ class Engine:
                         master_db = self.backend.get_master_db(self.device)
                     except Exception:
                         master_db = 0.0
+                    self._last_master_db = master_db
                     self._check_master_moved(master_db)
                     self._set_state(sessions=sessions, master_db=master_db,
                                     works=self.works.all_current(),
@@ -294,6 +298,9 @@ class Engine:
                 if self.controller is not None and cmd is not None:
                     activity = self.controller.activity(now)
                     self._drain_controller_events(now)
+                if self.meter_log is not None:
+                    self.meter_log.meters(r, cmd, self.profile.b_lufs if self.profile else 0.0,
+                                          getattr(self, "_last_master_db", 0.0), now)
                 self._set_state(reading=r, command=cmd, calibrating=self._calibrating,
                                 enabled=self.config.enabled, activity=activity,
                                 events=list(self._events),
@@ -307,6 +314,7 @@ class Engine:
                 time.sleep(dt)
 
     on_event = None      # optional sink(wall_time, kind, data, sounding_apps) -> None, e.g. the adjustment log
+    meter_log = None     # optional MeterLog: raw measurements for analysis
 
     def _sounding_apps(self) -> list[str]:
         """Short description of the apps making sound right now (no volumes)."""

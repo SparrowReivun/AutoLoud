@@ -3,7 +3,7 @@
 One file per launch in the config folder: ``adjust-YYYYMMDD-HHMMSS.log``.
 Each line: wall time, the event as the activity card shows it, and which
 apps were sounding at that moment (names and current work, no volumes).
-Files older than ``KEEP_DAYS`` are removed at startup.
+Files are kept for good (nothing is pruned).
 """
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Callable
 
 log = logging.getLogger(__name__)
-KEEP_DAYS = 14
 
 
 class AdjustLog:
@@ -24,7 +23,6 @@ class AdjustLog:
         self.path = folder / time.strftime("adjust-%Y%m%d-%H%M%S.log")
         self._f = open(self.path, "a", encoding="utf-8", buffering=1)   # line-buffered
         self._f.write(f"# AutoLoud adjustment log, started {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-        self._prune(folder)
 
     def __call__(self, when: float, kind: str, data: dict, apps: list[str]) -> None:
         try:
@@ -40,13 +38,3 @@ class AdjustLog:
             self._f.close()
         except Exception:
             pass
-
-    @staticmethod
-    def _prune(folder: Path) -> None:
-        cutoff = time.time() - KEEP_DAYS * 86400
-        for p in folder.glob("adjust-*.log"):
-            try:
-                if p.stat().st_mtime < cutoff:
-                    os.remove(p)
-            except Exception:
-                pass
