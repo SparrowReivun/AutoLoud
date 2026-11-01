@@ -33,7 +33,7 @@ from pycaw.constants import AudioSessionState  # type: ignore
 from pycaw.api.mmdeviceapi.depend.structures import PROPERTYKEY  # type: ignore
 from comtypes import GUID  # type: ignore
 
-BACKEND_VERSION = "0.3-comworker"
+BACKEND_VERSION = "0.4-comworker-restart"
 
 # DEVPKEY_Device_FriendlyName = {a45c254e-df1c-4efd-8020-67d146a850e0}, 14
 _PKEY_FRIENDLY_NAME = PROPERTYKEY()
@@ -50,10 +50,38 @@ class _ComWorker:
     through this single MTA thread, and no COM object ever leaves it.
     """
 
-    def __init__(self):
+    def __init__(self, on_restart: Callable[[], None] | None = None):
+        self._on_restart = on_restart
+        self._lock = threading.Lock()
+        self._restarts = 0
+        self._spawn()
+
+    def _spawn(self):
         self._q: "queue.Queue[tuple[Callable, Future] | None]" = queue.Queue()
-        self._t = threading.Thread(target=self._run, daemon=True, name="autoloud-com")
+        self._t = threading.Thread(target=self._run, daemon=True, name=f"autoloud-com-{self._restarts}")
         self._t.start()
+
+    def restart(self):
+        """A COM call hung (the audio service did not answer): abandon that
+        thread - it cannot be killed, it stays blocked inside Windows - and
+        serve all further calls from a fresh one with fresh COM objects."""
+        with self._lock:
+            self._restarts += 1
+            log.error("COM worker hung; starting worker #%d (the stuck thread is abandoned)", self._restarts)
+            old_q = self._q
+            self._spawn()
+            try:                      # fail whatever was still queued behind the hung call
+                while True:
+                    item = old_q.get_nowait()
+                    if item is not None:
+                        item[1].set_exception(TimeoutError("COM worker restarted"))
+            except queue.Empty:
+                pass
+        if self._on_restart is not None:
+            try:
+                self._on_restart()
+            except Exception:
+                log.exception("on_restart")
 
     def _run(self):
         try:
@@ -83,8 +111,14 @@ class _ComWorker:
         if threading.current_thread() is self._t:
             return fn()
         fut: Future = Future()
-        self._q.put((fn, fut))
-        return fut.result(timeout=timeout)
+        q = self._q
+        q.put((fn, fut))
+        try:
+            return fut.result(timeout=timeout)
+        except TimeoutError:
+            if q is self._q:          # nobody restarted it yet: do it
+                self.restart()
+            raise
 
     def stop(self):
         self._q.put(None)
@@ -99,11 +133,17 @@ class WindowsBackend:
         self._pa = pyaudio.PyAudio()
         self._stream = None
         self._cb = None
-        self._com = _ComWorker()
         # --- everything below is touched ONLY on the COM worker thread ---
         self._session_cache: dict[str, object] = {}
         self._endpoint_cache: dict[str, object] = {}   # device id -> IAudioEndpointVolume
         self._mgr_cache: dict[str, object] = {}        # device id -> IAudioSessionManager2
+        self._com = _ComWorker(on_restart=self._drop_caches)
+
+    def _drop_caches(self) -> None:
+        # the old COM objects belong to the abandoned thread: never touch them again
+        self._session_cache = {}
+        self._endpoint_cache = {}
+        self._mgr_cache = {}
 
     def thread_init(self) -> None:
         """Kept for interface compatibility; COM lives on its own thread now."""

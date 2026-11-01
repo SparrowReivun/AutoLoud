@@ -2,6 +2,7 @@
 
 ## 0.3.0 — 2026-10-31
 
+- Robustness: if a Core Audio call hangs (the audio service stops answering, e.g. around a device change or a stalled app), the COM worker thread is abandoned and a fresh one takes over with fresh objects, instead of every later call timing out; a single app whose volume call times out is skipped for that tick.
 - Intrusions are cut per app: when the protection fires because an app that just started sounding barged in over content that was already playing (a notification over music), the bus cut is undone and only that app is pulled down by the same amount, until it goes quiet (for good if it is in strong mode). The music no longer drops with every ding.
 - Modes instead of switches: the bus auto loudness is always on and the dashboard picks which parameter preset ("mode") it runs with; the per-app "Auto" tick is replaced by "strong mode" (peaks must stay 5 dB under B: fader to −10 dB or lower from the app's recorded peak, pulled further down on every protection cut it still trips). Tool apps are still detected and tagged.
 - Parameter presets: the Settings page keeps named sets of all control parameters (new / rename / delete / switch); changes are stored in the active preset.
