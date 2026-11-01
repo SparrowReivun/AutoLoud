@@ -278,7 +278,6 @@ class Engine:
                         cmd = self.controller.update(rr, now, self.meter, self._extra_visible_db,
                                                      cap, start)
                         self._last_cmd = cmd
-                        self._track_peaks(sessions, cmd)
                         if cmd.safety_triggered:
                             self._last_safety_t = now
                             self._safety_count += 1
@@ -450,24 +449,11 @@ class Engine:
         self.mixer_changed()
 
     def set_strong(self, app_name: str, on: bool) -> None:
-        """Mixer checkbox. On: fader to -10 dB, or lower if history says this
-        app's peaks would still exceed B - 5 dB at the current bus gain.
-        Off: fader back to 0 dB."""
+        """Mixer checkbox. The fader is left where it is; from now on (on) or
+        no longer (off) every protection cut this app trips pulls its fader down."""
         mix = self.config.mix_for(app_name)
         mix.strong = on
-        if on:
-            off = self.STRONG_FADER_DB
-            if mix.peak_src_lufs is not None and self.profile is not None:
-                g = self._last_cmd.total_db if self._last_cmd is not None else 0.0
-                need = (self.profile.b_lufs - self.STRONG_HEADROOM_DB) - (mix.peak_src_lufs + g)
-                off = min(off, round(need, 1))
-            mix.offset_db = max(-40.0, off)
-            self._event("strong_on", app=self.config.display_name(app_name), off=mix.offset_db,
-                        hist=(mix.peak_src_lufs is not None))
-        else:
-            mix.offset_db = 0.0
-            self._event("strong_off", app=self.config.display_name(app_name))
-        self._holds.pop(app_name, None)
+        self._event("strong_on" if on else "strong_off", app=self.config.display_name(app_name), off=mix.offset_db)
         self._dirty = True
         self.mixer_changed()
 
