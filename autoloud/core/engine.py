@@ -303,9 +303,12 @@ class Engine:
                                           getattr(self, "_last_master_db", 0.0), now)
                 self._set_state(reading=r, command=cmd, calibrating=self._calibrating,
                                 enabled=self.config.enabled, activity=activity,
-                                events=list(self._events),
+                                events=list(self._events), error="",
                                 safety_active=(cmd is not None and cmd.phase.value == "safety"),
                                 safety_count=self._safety_count)
+            except TimeoutError:
+                # the audio service did not answer in time: skip this tick, keep running
+                self._set_state(error="audio service not answering")
             except Exception as e:
                 log.exception("control loop")
                 self._set_state(error=str(e))

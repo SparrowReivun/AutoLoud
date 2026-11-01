@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import queue
 import threading
+import time
 from concurrent.futures import Future
 from typing import Callable
 
@@ -33,7 +34,7 @@ from pycaw.constants import AudioSessionState  # type: ignore
 from pycaw.api.mmdeviceapi.depend.structures import PROPERTYKEY  # type: ignore
 from comtypes import GUID  # type: ignore
 
-BACKEND_VERSION = "0.4-comworker-restart"
+BACKEND_VERSION = "0.5-comworker-patient"
 
 # DEVPKEY_Device_FriendlyName = {a45c254e-df1c-4efd-8020-67d146a850e0}, 14
 _PKEY_FRIENDLY_NAME = PROPERTYKEY()
@@ -54,6 +55,8 @@ class _ComWorker:
         self._on_restart = on_restart
         self._lock = threading.Lock()
         self._restarts = 0
+        self._busy_since = 0.0        # monotonic time the worker took its current call
+        self._last_slow_log = 0.0
         self._spawn()
 
     def _spawn(self):
@@ -61,12 +64,15 @@ class _ComWorker:
         self._t = threading.Thread(target=self._run, daemon=True, name=f"autoloud-com-{self._restarts}")
         self._t.start()
 
-    def restart(self):
+    def restart(self, q=None):
         """A COM call hung (the audio service did not answer): abandon that
         thread - it cannot be killed, it stays blocked inside Windows - and
         serve all further calls from a fresh one with fresh COM objects."""
         with self._lock:
+            if q is not None and q is not self._q:
+                return                # another caller already restarted this one
             self._restarts += 1
+            self._busy_since = 0.0
             log.error("COM worker hung; starting worker #%d (the stuck thread is abandoned)", self._restarts)
             old_q = self._q
             self._spawn()
@@ -96,16 +102,20 @@ class _ComWorker:
             if item is None:
                 break
             fn, fut = item
+            self._busy_since = time.monotonic()
             try:
                 fut.set_result(fn())
             except BaseException as e:  # noqa: BLE001
                 fut.set_exception(e)
+            self._busy_since = 0.0
         import gc
         gc.collect()
         try:
             comtypes.CoUninitialize()
         except Exception:
             pass
+
+    HANG_S = 20.0     # a call older than this is a hang, not a slow audio service
 
     def call(self, fn: Callable, timeout: float = 5.0):
         if threading.current_thread() is self._t:
@@ -116,8 +126,20 @@ class _ComWorker:
         try:
             return fut.result(timeout=timeout)
         except TimeoutError:
-            if q is self._q:          # nobody restarted it yet: do it
-                self.restart()
+            # The audio service can stall for a while (device change, a virtual
+            # audio driver reconfiguring); the call may still complete. Only a
+            # worker stuck in ONE call for HANG_S is abandoned - and once.
+            with self._lock:
+                stuck = (q is self._q and self._busy_since
+                         and time.monotonic() - self._busy_since >= self.HANG_S)
+            if stuck:
+                self.restart(q)
+            else:
+                now = time.monotonic()
+                if now - self._last_slow_log > 10.0:
+                    self._last_slow_log = now
+                    log.warning("audio service slow: a Core Audio call did not answer within %.0f s "
+                                "(skipping this tick; the worker is kept)", timeout)
             raise
 
     def stop(self):

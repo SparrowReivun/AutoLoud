@@ -223,9 +223,16 @@ class DashboardPage(QWidget):
         self.thr_val.setText(f"B {m:+.1f} dB" + (f" = {p.b_lufs + m:.1f}" if p else ""))
 
     def refresh_devices(self):
+        try:
+            devs = self.engine.backend.list_output_devices()
+        except Exception:                      # audio service not answering: keep what we have
+            log.warning("device list unavailable (audio service not answering)")
+            if self.device_box.count() == 0 and self.engine.device is not None:
+                self.device_box.addItem(self.engine.device.name, self.engine.device.id)
+            return
         self.device_box.blockSignals(True)
         self.device_box.clear()
-        for d in self.engine.backend.list_output_devices():
+        for d in devs:
             self.device_box.addItem(d.name + ("  ★" if d.is_default else ""), d.id)
         if self.engine.device:
             i = self.device_box.findData(self.engine.device.id)
@@ -724,7 +731,12 @@ class MainWindow(QMainWindow):
 
     def _device_changed(self, idx):
         dev_id = self.dash.device_box.itemData(idx)
-        for d in self.engine.backend.list_output_devices():
+        try:
+            devs = self.engine.backend.list_output_devices()
+        except Exception:
+            log.warning("device list unavailable (audio service not answering)")
+            return
+        for d in devs:
             if d.id == dev_id:
                 self.engine.start(d)
                 self.engine.config.save()
