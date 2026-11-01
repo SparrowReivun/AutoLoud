@@ -2,6 +2,7 @@
 
 ## 0.3.0 — 2026-10-31
 
+- Modes instead of switches: the bus auto loudness is always on and the dashboard picks which parameter preset ("mode") it runs with; the per-app "Auto" tick is replaced by "strong mode" (peaks must stay 5 dB under B: fader to −10 dB or lower from the app's recorded peak, pulled further down on every protection cut it still trips). Tool apps are still detected and tagged.
 - Parameter presets: the Settings page keeps named sets of all control parameters (new / rename / delete / switch); changes are stored in the active preset.
 - Adjustment log: every decision the dashboard shows is also written, in the same words plus the apps sounding at that moment, to `adjust-<timestamp>.log` in the config folder (one file per launch, kept 14 days).
 - On start the Windows master volume is set to 40 % (Settings, 0 = leave it) and taken as the calibration reference, so there is boost headroom every session.

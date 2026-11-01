@@ -52,8 +52,13 @@ class DashboardPage(QWidget):
         self.device_box = QComboBox()
         self.device_box.setMinimumWidth(260)
         top.addWidget(self.device_box)
-        self.enable = QCheckBox(t("enable"))
-        top.addWidget(self.enable)
+        top.addSpacing(12)
+        top.addWidget(QLabel(t("dash.mode")))
+        self.mode_box = QComboBox(); self.mode_box.setMinimumWidth(160)
+        self.mode_box.setToolTip(t("dash.mode.tip"))
+        self._fill_modes()
+        self.mode_box.currentTextChanged.connect(self._mode_changed)
+        top.addWidget(self.mode_box)
         lay.addLayout(top)
 
         self.status = badge(t("status.idle"))
@@ -184,6 +189,25 @@ class DashboardPage(QWidget):
         grid.addWidget(c)
         return v
 
+    def _fill_modes(self):
+        cfg = self.engine.config
+        cfg.ensure_presets()
+        self.mode_box.blockSignals(True)
+        self.mode_box.clear()
+        for name in cfg.presets:
+            self.mode_box.addItem(name)
+        self.mode_box.setCurrentText(cfg.active_preset)
+        self.mode_box.blockSignals(False)
+
+    def _mode_changed(self, name: str):
+        cfg = self.engine.config
+        if not name or name == cfg.active_preset:
+            return
+        cfg.switch_preset(name)
+        self.engine.apply_params()
+        self.engine._event("mode", name=name)
+        cfg.save()
+
     def _b_changed(self, v):
         self.engine.set_target_b(v / 10.0)
         self.b_val.setText(t("dash.b.mute") if v <= -600 else f"{v / 10.0:.1f} LUFS")
@@ -260,9 +284,9 @@ class DashboardPage(QWidget):
                 k.setText("—")
         self.status.setText(t(key))
         self._update_activity(s)
-        self.enable.blockSignals(True)
-        self.enable.setChecked(s.enabled)
-        self.enable.blockSignals(False)
+        if self.mode_box.currentText() != self.engine.config.active_preset or \
+                self.mode_box.count() != len(self.engine.config.presets):
+            self._fill_modes()
         self.err.setText(s.error)
 
 
@@ -315,10 +339,15 @@ class AppsPage(QWidget):
             row["bar"].setValue(int(min(1.0, sess.peak) * 100))
             row["active"] = sess.active
             mix = self.engine.config.apps.get(sess.name)
-            if mix is not None and row["auto"].isChecked() != mix.auto:   # the tool detector switched it
-                row["auto"].blockSignals(True); row["auto"].setChecked(mix.auto); row["auto"].blockSignals(False)
             if mix is not None:
-                row["auto"].setToolTip(t("apps.auto.tool") if mix.auto_set_by == "tool" else t("apps.auto.tip"))
+                if row["auto"].isChecked() != mix.strong:
+                    row["auto"].blockSignals(True); row["auto"].setChecked(mix.strong); row["auto"].blockSignals(False)
+                row["tool"].setVisible(not mix.auto and mix.auto_set_by == "tool")
+                if not row["slider"].isSliderDown():       # fader moved by the program (strong mode)
+                    want = -60 if mix.offset_db <= -60 else int(round(mix.offset_db))
+                    if want != row["slider"].value():
+                        row["slider"].blockSignals(True); row["slider"].setValue(want); row["slider"].blockSignals(False)
+                        row["val"].setText("mute" if want <= -60 else f"{want:+d} dB")
             w = s.works.get(sess.name)
             if w is None:
                 row["work"].setText("")
@@ -364,12 +393,14 @@ class AppsPage(QWidget):
         alias.textEdited.connect(alias_changed)
         top.addWidget(alias)
         sub = QLabel(name); sub.setObjectName("muted"); top.addWidget(sub, 1)
-        auto = QCheckBox(t("apps.auto")); auto.setChecked(mix.auto)
-        auto.setToolTip(t("apps.auto.tip"))
-        def auto_changed(on, m=mix, n=name):
-            m.auto = bool(on); m.auto_set_by = "user"; self._changed(n)
-        auto.toggled.connect(auto_changed)
+        auto = QCheckBox(t("apps.strong")); auto.setChecked(mix.strong)
+        auto.setToolTip(t("apps.strong.tip"))
+        def strong_changed(on, n=name):
+            self.engine.set_strong(n, bool(on)); self._save_timer.start()
+        auto.toggled.connect(strong_changed)
         top.addWidget(auto)
+        tool = QLabel(t("apps.tool")); tool.setObjectName("muted"); tool.setToolTip(t("apps.auto.tool")); tool.hide()
+        top.addWidget(tool)
         work = QLabel(""); work.setObjectName("muted"); work.setToolTip(t("apps.work.tip"))
         bar = QProgressBar(); bar.setRange(0, 100); bar.setTextVisible(False); bar.setFixedHeight(8)
         row = QHBoxLayout()
@@ -389,7 +420,7 @@ class AppsPage(QWidget):
         row.addWidget(sl, 1); row.addWidget(val); row.addWidget(reset)
         c.body.addLayout(top); c.body.addWidget(work); c.body.addWidget(bar); c.body.addLayout(row)
         self.inner_lay.insertWidget(self.inner_lay.count() - 1, c)
-        self.rows[key] = {"card": c, "bar": bar, "slider": sl, "sub": sub, "auto": auto, "work": work, "active": False}
+        self.rows[key] = {"card": c, "bar": bar, "slider": sl, "val": val, "sub": sub, "auto": auto, "tool": tool, "work": work, "active": False}
 
 
 # ----------------------------------------------------------------------
@@ -628,7 +659,6 @@ class MainWindow(QMainWindow):
         self.state_changed.connect(self._on_state)
         engine.listeners.append(self.state_changed.emit)
         self.dash.device_box.currentIndexChanged.connect(self._device_changed)
-        self.dash.enable.toggled.connect(self._enable_toggled)
 
         self._ui_timer = QTimer(self); self._ui_timer.setInterval(100)
         self._ui_timer.timeout.connect(lambda: self._on_state(engine.state))
@@ -638,10 +668,6 @@ class MainWindow(QMainWindow):
         # tray
         self.tray = QSystemTrayIcon(make_icon(), self)
         menu = QMenu()
-        self.tray_enable = QAction(t("enable"), menu, checkable=True)
-        self.tray_enable.setChecked(engine.config.enabled)
-        self.tray_enable.toggled.connect(self._enable_toggled)
-        menu.addAction(self.tray_enable)
         menu.addAction(QAction(t("tray.show"), menu, triggered=self.showNormal))
         menu.addSeparator()
         menu.addAction(QAction(t("tray.quit"), menu, triggered=self.quit))
@@ -695,7 +721,6 @@ class MainWindow(QMainWindow):
         self.dash.update_state(s)
         if self.stack.currentIndex() == 1:
             self.apps.update_state(s)
-        self.tray_enable.blockSignals(True); self.tray_enable.setChecked(s.enabled); self.tray_enable.blockSignals(False)
 
     def _device_changed(self, idx):
         dev_id = self.dash.device_box.itemData(idx)
@@ -706,10 +731,6 @@ class MainWindow(QMainWindow):
                 if not self.engine.profile.calibrated:
                     QTimer.singleShot(200, self.run_calibration)
                 break
-
-    def _enable_toggled(self, on):
-        self.engine.set_enabled(bool(on))
-        self.engine.config.save()
 
     def run_calibration(self):
         if self.engine.device is None:

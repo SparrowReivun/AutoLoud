@@ -11,6 +11,15 @@ _T = {
     "nav.settings": ("设置", "Settings"),
     "device": ("输出设备", "Output device"),
     "enable": ("总线自动响度", "Bus auto loudness"),
+    "dash.mode": ("模式", "Mode"),
+    "dash.mode.tip": ("当前使用的参数预设（在设置页新建 / 重命名）", "The parameter preset in use (create / rename on the Settings page)"),
+    "ev.mode": ("切换到模式「{name}」", "Switched to mode \u201c{name}\u201d"),
+    "apps.strong": ("强力模式", "Strong mode"),
+    "apps.strong.tip": ("勾选：这个应用的峰值不得超过 B − 5 dB。推子先拉到 −10 dB（有历史峰值记录的话按记录算），之后每次它仍然触发保护，推子就再往下拉。取消：推子回到 0 dB。", "Tick: this app's peaks must stay 5 dB under B. Its fader goes to −10 dB (or lower, from its recorded peak), and every time it still trips the protection the fader goes further down. Untick: fader back to 0 dB."),
+    "apps.tool": ("工具类应用", "tool app"),
+    "ev.strong_on": ("{app} 进入强力模式 → 推子 {off:+.1f} dB", "{app} strong mode on → fader {off:+.1f} dB"),
+    "ev.strong_off": ("{app} 退出强力模式 → 推子回到 0 dB", "{app} strong mode off → fader back to 0 dB"),
+    "ev.strong_cut": ("强力模式：{app} 仍超 B−5 {excess:.1f} dB → 推子降到 {off:+.1f} dB", "Strong mode: {app} still {excess:.1f} dB over B−5 → fader {off:+.1f} dB"),
     "status.idle": ("待机（无音频）", "Idle (no audio)"),
     "status.onset": ("起始保护中", "Onset guard"),
     "status.adjust": ("听 5 秒、拧一点", "Listening & stepping"),
@@ -109,10 +118,10 @@ _T = {
     "genre": ("音乐风格", "Genre"),
     "track": ("曲目", "Track"),
     "apps.h": ("应用混音台", "App mixer"),
-    "apps.hint": ("每个应用一条推子（最低静音，最高 +15 dB），总线自动响度开关的时候都有效。推到 0 dB 以上时，程序会抬高主音量并把其它应用压低相同的量来实现。\n"
-                  "「自动」勾选 = 总线的自动增益作用于该应用；取消勾选 = 只按推子固定。你手动动过的推子，在该应用当前作品结束前自动增益不会再碰它。",
-                  "One fader per app (mute at the bottom, +15 dB at the top), active whether the bus auto loudness is on or off. Above 0 dB the master is raised and the other apps are pulled down by the same amount.\n"
-                  "\u201cAuto\u201d ticked = the bus auto gain applies to this app; unticked = the app stays at its fader only."),
+    "apps.hint": ("每个应用一条推子（最低静音，最高 +15 dB），和总线的模式叠加生效：总线按首页选的模式调整整体，推子是这个应用相对其它应用的偏移。推到 0 dB 以上时，程序会抬高主音量并把其它应用压低相同的量来实现。\n"
+                  "「强力模式」= 这个应用的峰值不得超过 B − 5 dB：推子先拉到 −10 dB（有历史峰值记录则按记录算），之后它每触发一次保护，推子就再往下拉。你手动动过的推子，在该应用当前作品结束前自动增益不会再碰它。",
+                  "One fader per app (mute at the bottom, +15 dB at the top), on top of the bus: the bus follows the mode chosen on the dashboard, the fader is this app's offset against the others. Above 0 dB the master is raised and the other apps are pulled down by the same amount.\n"
+                  "\u201cStrong mode\u201d = this app's peaks must stay 5 dB under B: fader to −10 dB (or lower from its recorded peak), and every protection cut it still trips pulls the fader further down."),
     "apps.fader": ("推子", "Fader"),
     "apps.auto": ("自动", "Auto"),
     "apps.auto.tip": ("总线自动响度是否作用于这个应用", "Whether the bus auto loudness applies to this app"),

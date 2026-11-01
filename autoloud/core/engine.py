@@ -131,6 +131,7 @@ class Engine:
         self.device = device
         self.profile = self.config.profile_for(device.id, device.name)
         self.config.selected_device_id = device.id
+        self.config.enabled = True            # the bus is always on; "modes" are presets
         pct = self.config.startup_master_percent
         if pct > 0 and not getattr(self, "_startup_master_done", False):
             # once per launch: park the Windows master at a known position so there is
@@ -272,9 +273,11 @@ class Engine:
                         cmd = self.controller.update(rr, now, self.meter, self._extra_visible_db,
                                                      cap, start)
                         self._last_cmd = cmd
+                        self._track_peaks(sessions, cmd)
                         if cmd.safety_triggered:
                             self._safety_count += 1
                             log.info("safety cut #%d: perceived %.1f LUFS", self._safety_count, cmd.perceived_lufs)
+                            self._strong_after_cut(sessions, cmd)
                     self._apply(cmd, sessions)
                 if getattr(self, "_dirty", False) and now - getattr(self, "_last_save", 0.0) > 5.0:
                     self._dirty = False; self._last_save = now
@@ -360,6 +363,70 @@ class Engine:
                 log.info("tool app detected: %s sounds %.0f%% of the time -> Auto off", s.name, duty * 100)
                 self._event("tool_app", app=self.config.display_name(s.name), duty=duty * 100)
                 self.mixer_changed()
+
+    # ---- strong mode --------------------------------------------------------
+    STRONG_FADER_DB = -10.0       # default fader for an app switched to strong mode
+    STRONG_HEADROOM_DB = 5.0      # a strong app's peaks must stay this far under B
+
+    def _sounding(self, sessions: list[AudioSession]) -> list[AudioSession]:
+        return [s for s in sessions if s.active and not s.is_self and s.peak > 0.01]
+
+    def _track_peaks(self, sessions: list[AudioSession], cmd: GainCommand) -> None:
+        """When exactly one app is sounding, what we hear is that app alone:
+        remember the loudest it has been *at 0 dB gain* (bus gain and its own
+        fader taken out), so strong mode can size its fader from history."""
+        snd = self._sounding(sessions)
+        if len(snd) != 1 or cmd.perceived_lufs <= -90:
+            return
+        s = snd[0]
+        mix = self.config.mix_for(s.name)
+        src = cmd.perceived_lufs - cmd.total_db - mix.offset_db
+        if mix.peak_src_lufs is None or src > mix.peak_src_lufs + 0.1:
+            mix.peak_src_lufs = round(src, 1)
+            self._dirty = True
+
+    def _strong_after_cut(self, sessions: list[AudioSession], cmd: GainCommand) -> None:
+        """A protection cut fired: if the loudest app is in strong mode, its
+        own fader goes down by the excess over B - headroom, for good."""
+        if self.profile is None:
+            return
+        snd = self._sounding(sessions)
+        if not snd:
+            return
+        s = max(snd, key=lambda x: x.peak)
+        mix = self.config.mix_for(s.name)
+        if not mix.strong:
+            return
+        excess = cmd.perceived_lufs - (self.profile.b_lufs - self.STRONG_HEADROOM_DB)
+        if excess <= 0.5:
+            return
+        mix.offset_db = max(-40.0, round(mix.offset_db - excess, 1))
+        self._dirty = True
+        log.info("strong mode: %s still %.1f dB over B-%g -> fader %+.1f dB", s.name, excess, self.STRONG_HEADROOM_DB, mix.offset_db)
+        self._event("strong_cut", app=self.config.display_name(s.name), excess=excess, off=mix.offset_db)
+        self.mixer_changed()
+
+    def set_strong(self, app_name: str, on: bool) -> None:
+        """Mixer checkbox. On: fader to -10 dB, or lower if history says this
+        app's peaks would still exceed B - 5 dB at the current bus gain.
+        Off: fader back to 0 dB."""
+        mix = self.config.mix_for(app_name)
+        mix.strong = on
+        if on:
+            off = self.STRONG_FADER_DB
+            if mix.peak_src_lufs is not None and self.profile is not None:
+                g = self._last_cmd.total_db if self._last_cmd is not None else 0.0
+                need = (self.profile.b_lufs - self.STRONG_HEADROOM_DB) - (mix.peak_src_lufs + g)
+                off = min(off, round(need, 1))
+            mix.offset_db = max(-40.0, off)
+            self._event("strong_on", app=self.config.display_name(app_name), off=mix.offset_db,
+                        hist=(mix.peak_src_lufs is not None))
+        else:
+            mix.offset_db = 0.0
+            self._event("strong_off", app=self.config.display_name(app_name))
+        self._holds.pop(app_name, None)
+        self._dirty = True
+        self.mixer_changed()
 
     def _boost_cap_db(self) -> float:
         """How far the master volume can really be raised above the calibration

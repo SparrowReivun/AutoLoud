@@ -70,6 +70,8 @@ class AppMix:
     alias: str = ""               # user label (e.g. "Apple Music" for AMP)
     last_gain_db: float | None = None   # bus gain this app ended up with last time (rule 1)
     auto_set_by: str = ""         # "" | "tool" (auto switched off by the tool-app detector) | "user" (never touch again)
+    strong: bool = False          # "strong mode": this app must never exceed B - 5 dB (its fader is pulled down for it)
+    peak_src_lufs: float | None = None   # loudest this app has been at 0 dB gain (its intrinsic peak), when sounding alone
 
 
 @dataclass
