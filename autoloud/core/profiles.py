@@ -91,6 +91,8 @@ class AppConfig:
     active_preset: str = ""
     volume_keys: bool = True      # volume keys / knob adjust B instead of the Windows master volume
     sync_default_device: bool = True   # picking a device on the dashboard also makes it the Windows default output
+    exit_master_percent: float = -1.0  # master volume to leave on exit / crash: -1 = what it was before start-up
+    master_before_percent: float = -1.0   # the master level found at start-up (persisted so a crash does not lose it)
     volume_key_step_db: float = 0.5
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
@@ -118,6 +120,8 @@ class AppConfig:
             cfg.start_minimized = raw.get("start_minimized", False)
             cfg.volume_keys = bool(raw.get("volume_keys", True))
             cfg.sync_default_device = bool(raw.get("sync_default_device", True))
+            cfg.exit_master_percent = float(raw.get("exit_master_percent", -1.0))
+            cfg.master_before_percent = float(raw.get("master_before_percent", -1.0))
             cfg.sidebar_collapsed = bool(raw.get("sidebar_collapsed", False))
             cfg.startup_master_percent = float(raw.get("startup_master_percent", 80.0))
             pv = int(raw.get("presets_version", 1))
@@ -161,6 +165,8 @@ class AppConfig:
             "start_minimized": self.start_minimized,
             "volume_keys": self.volume_keys,
             "sync_default_device": self.sync_default_device,
+            "exit_master_percent": self.exit_master_percent,
+            "master_before_percent": self.master_before_percent,
             "sidebar_collapsed": self.sidebar_collapsed,
             "startup_master_percent": self.startup_master_percent,
             "presets": self.presets,

@@ -11,6 +11,9 @@ from autoloud.core.engine import Engine
 from autoloud.core.profiles import AppConfig, config_dir
 
 
+_ENGINE: dict = {}      # the running engine, for the crash handlers
+
+
 def _install_crash_handlers() -> None:
     """Native crashes -> crash.log (faulthandler); Python exceptions -> log + dialog."""
     import faulthandler
@@ -24,6 +27,9 @@ def _install_crash_handlers() -> None:
     def hook(exc_type, exc, tb):
         text = "".join(traceback.format_exception(exc_type, exc, tb))
         logging.getLogger("autoloud").error("Unhandled exception:\n%s", text)
+        eng = _ENGINE.get("engine")
+        if eng is not None:
+            eng.emergency_exit()                  # never leave the master parked high
         try:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(None, "AutoLoud - error", text[-1500:])
@@ -63,6 +69,9 @@ def main(argv=None) -> int:
 
     from autoloud.ui.main_window import MainWindow, DashboardPage
     win = MainWindow(engine)
+    _ENGINE["engine"] = engine
+    import atexit
+    atexit.register(lambda: engine.emergency_exit() if engine._running else None)
     # every decision, in the dashboard's words, into adjust-<timestamp>.log
     from autoloud.core.adjustlog import AdjustLog
     adjust_log = AdjustLog(config_dir(), DashboardPage._fmt_event)

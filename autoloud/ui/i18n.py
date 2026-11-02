@@ -215,6 +215,7 @@ _T = {
     "preset.created": ("已新建预设「{name}」（当前值的副本）", "Preset \u201c{name}\u201d created (a copy of the current values)"),
     "preset.delete_confirm": ("删除预设「{name}」？", "Delete preset \u201c{name}\u201d?"),
     "set.startup_master": ("启动时把 Windows 主音量设为 (%)，0 = 不动", "Set the Windows master volume on start (%), 0 = leave it"),
+    "set.exit_master": ("退出 / 崩溃时把 Windows 主音量设为 (%)，-1 = 恢复启动前的值", "Windows master volume to leave on exit / crash (%), -1 = what it was before start-up"),
     "set.volkeys": ("用音量键 / 音量旋钮调节舒适响度 P（接管 F11/F12 等，不再动 Windows 主音量）", "Volume keys / knob adjust comfort level P (intercepts F11/F12 etc.; the Windows master volume is left alone)"),
     "set.volkeys.step": ("每按一下调多少 (dB)", "Per key press (dB)"),
     "ev.volkey_master": ("音量键被系统拿走了（前台是管理员窗口）→ 当作按了 {presses} 下：P {delta:+.1f} dB，主音量放回原位", "Volume key went to Windows (elevated window in front) → read as {presses} press(es): P {delta:+.1f} dB, master parked again"),

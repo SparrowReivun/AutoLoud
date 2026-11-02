@@ -471,12 +471,22 @@ class Engine:
             return          # sessions first (attenuated to the parked gain), master second: no blast
         done.add(self.device.id); self._startup_master_done = done     # once per device per launch
         try:
+            parked = max(0.0, min(1.0, pct / 100.0))
             try:                                   # remembered so exit can put it back
-                self._master_before = float(self.backend.get_master_scalar(self.device))
+                now_sc = float(self.backend.get_master_scalar(self.device))
             except Exception:
-                self._master_before = None
-            self.backend.set_master_scalar(self.device, max(0.0, min(1.0, pct / 100.0)))
-            self._master_parked = max(0.0, min(1.0, pct / 100.0))
+                now_sc = None
+            stored = self.config.master_before_percent
+            if now_sc is not None and abs(now_sc - parked) > 0.015:
+                self._master_before = now_sc          # a level the user set: remember it (also on disk)
+                self.config.master_before_percent = round(now_sc * 100, 1); self._dirty = True
+            elif stored is not None and stored >= 0:
+                self._master_before = stored / 100.0  # the master is still where we parked it last
+                                                      # time (a crash, or the previous exit): keep the original
+            else:
+                self._master_before = now_sc
+            self.backend.set_master_scalar(self.device, parked)
+            self._master_parked = parked
             self.profile.master_ref_db = self.backend.get_master_db(self.device)
             self._applied_master_db = None
             log.info("startup: master volume set to %.0f%% (%.1f dB) and taken as the reference", pct, self.profile.master_ref_db)
@@ -850,6 +860,14 @@ class Engine:
             except Exception:
                 log.exception("set master")
 
+    def emergency_exit(self) -> None:
+        """Called from the crash handlers: put the volumes back as a normal exit would."""
+        try:
+            self._running = False
+            self._restore_volumes(leaving=True)
+        except Exception:
+            log.exception("emergency exit")
+
     def _restore_volumes(self, leaving: bool = False) -> None:
         """Sessions back to 100 %. The master goes back to the calibration
         reference - or, when the program is leaving, to where it was before
@@ -862,9 +880,17 @@ class Engine:
             parked = getattr(self, "_master_parked", None)
             master_first = leaving and before is not None and (parked is None or before <= parked)
             def put_master():
-                if leaving and before is not None:
-                    self.backend.set_master_scalar(self.device, before)
-                    log.info("exit: master volume restored to %.0f%%", before * 100)
+                if leaving:
+                    want = self.config.exit_master_percent / 100.0 if self.config.exit_master_percent >= 0 else before
+                    if want is None:
+                        return
+                    self.backend.set_master_scalar(self.device, max(0.0, min(1.0, want)))
+                    self.config.master_before_percent = -1.0      # handed back: nothing to keep
+                    try:
+                        self.config.save()
+                    except Exception:
+                        pass
+                    log.info("exit: master volume set to %.0f%%", want * 100)
                 elif self.profile is not None and self.profile.calibrated:
                     self.backend.set_master_db(self.device, self.profile.master_ref_db)
             # order matters for the ears: whichever move makes things quieter goes first
