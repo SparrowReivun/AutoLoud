@@ -59,7 +59,8 @@ class DashboardPage(QWidget):
         self._fill_modes()
         self.mode_box.currentTextChanged.connect(self._mode_changed)
         top.addWidget(self.mode_box)
-        self.mode_note = QLabel(""); self.mode_note.setObjectName("muted")
+        self.mode_note = QLabel(""); self.mode_note.setObjectName("muted"); self.mode_note.setMaximumWidth(220)
+        self.mode_note.setToolTip(t("apps.preset.tip"))
         top.addWidget(self.mode_note)
         lay.addLayout(top)
 
@@ -306,6 +307,8 @@ class DashboardPage(QWidget):
             else:
                 self.k_target.setToolTip("")
             self.m_mom.set_marker("T", c.target_lufs, theme.ACCENT)
+            self.m_st.set_marker("T", c.target_lufs, theme.ACCENT)
+            self.m_int.set_marker("T", c.target_lufs, theme.ACCENT)
             key = {Phase.IDLE: "status.idle", Phase.ONSET: "status.onset", Phase.ADJUST: "status.adjust",
                    Phase.STEADY: "status.steady", Phase.SAFETY: "status.safety"}[c.phase]
         else:

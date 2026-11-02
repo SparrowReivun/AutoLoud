@@ -68,6 +68,8 @@ class Engine:
         self._state_lock = threading.Lock()
         self._reading = EngineState().reading
         self._reading_lock = threading.Lock()
+        self._last_audio_t = time.perf_counter()
+        self._last_capture_retry = -1e9
         self._thread: threading.Thread | None = None
         self._running = False
         self._calibrating = False
@@ -149,6 +151,7 @@ class Engine:
             self._set_state(error=f"Capture failed: {e}", running=False)
             return
         self.meter = StreamingLoudnessMeter(fs, ch, integration_window_s=60.0)
+        self._last_audio_t = time.perf_counter()
         self.controller = GainController(self.profile.targets(), self.config.params)
         self._applied_session_db.clear()
         self._applied_master_db = None
@@ -209,6 +212,44 @@ class Engine:
         r = self.meter.process(x)
         with self._reading_lock:
             self._reading = r
+            self._last_audio_t = time.perf_counter()
+
+    # ------------------------------------------------------------------
+    # capture watchdog
+    CAPTURE_STALL_S = 2.0       # no loopback data this long while an app sounds = the stream died
+    CAPTURE_RETRY_S = 5.0
+    _SILENT = LoudnessReading(momentary=MIN_LUFS, short_term=MIN_LUFS, integrated=MIN_LUFS,
+                              peak_dbfs=-100.0, has_signal=False)
+
+    def _capture_watch(self, r: LoudnessReading, sessions: list[AudioSession], now: float) -> LoudnessReading:
+        """The WASAPI loopback stream can die quietly (a Bluetooth headset
+        re-negotiating, a device change): the callback just stops and the
+        last reading would stay on screen - and in the rules - for ever.
+        A stale reading is treated as silence, and while some app's own
+        meter says it is sounding, the capture is restarted."""
+        stale = now - self._last_audio_t > self.CAPTURE_STALL_S
+        if not stale:
+            return r
+        if self._sounding(sessions) and now - self._last_capture_retry > self.CAPTURE_RETRY_S:
+            self._last_capture_retry = now
+            log.warning("loopback capture stalled for %.1f s while apps sound: restarting it", now - self._last_audio_t)
+            self._event("capture_restart")
+            try:
+                dev = self._pick_device() or self.device
+                fs, ch = self.backend.start_capture(dev, self._on_audio, block_ms=20)
+                if self.meter is None or self.meter.fs != fs or self.meter.channels != ch:
+                    self.meter = StreamingLoudnessMeter(fs, ch, integration_window_s=60.0)
+                if dev.id != self.device.id:
+                    log.info("capture moved to %r", dev.name)
+                    self.device = dev
+                    self.profile = self.config.profile_for(dev.id, dev.name)
+                    if self.controller is not None:
+                        self.controller.retune(self.profile.targets())
+                    self._set_state(device=dev, profile=self.profile)
+                self._last_audio_t = now          # give the new stream its grace period
+            except Exception:
+                log.exception("capture restart failed")
+        return self._SILENT
 
     # ------------------------------------------------------------------
     # control thread
@@ -225,6 +266,7 @@ class Engine:
             with self._reading_lock:
                 r = self._reading
             now = t0
+            r = self._capture_watch(r, sessions, now)
             try:
                 if now >= next_poll:
                     next_poll = now + self.SESSION_POLL_S
@@ -253,7 +295,8 @@ class Engine:
                     self._boost_cap = self._boost_cap_db()           # one COM call per poll, not per tick
                     auto_active = [s.name for s in sessions if s.active and not s.is_self
                                    and self._follows_bus(s.name)]
-                    for app_name, work in self.works.update(sessions, now):
+                    for app_name, work in self.works.update(
+                            [x for x in sessions if x.name not in self.SYSTEM_APPS], now):
                         log.info("new work in %s: #%d %s (%s)", app_name, work.index,
                                  work.label() or "-", work.source)
                         self._event("work", app=self.config.display_name(app_name), index=work.index,
@@ -414,8 +457,13 @@ class Engine:
     STRONG_FADER_DB = -10.0       # default fader for an app switched to strong mode
     STRONG_HEADROOM_DB = 5.0      # a strong app's peaks must stay this far under B
 
+    # Windows service sessions that carry other apps' audio (Bluetooth / AVRCP, the audio
+    # engine itself): never "an app sounding" for attribution, works or presets
+    SYSTEM_APPS = {"svchost.exe", "audiodg.exe", "System sounds"}
+
     def _sounding(self, sessions: list[AudioSession]) -> list[AudioSession]:
-        return [s for s in sessions if s.active and not s.is_self and s.peak > 0.01]
+        return [s for s in sessions if s.active and not s.is_self and s.peak > 0.01
+                and s.name not in self.SYSTEM_APPS]
 
     def source_loudness(self, sessions: list[AudioSession], r, cmd: GainCommand | None
                         ) -> tuple[str, float | None, float | None]:
