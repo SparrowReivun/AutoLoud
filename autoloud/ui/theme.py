@@ -44,6 +44,15 @@ QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: 4px; border: 1
 QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
 QScrollArea {{ border: none; background: transparent; }}
 QScrollArea > QWidget > QWidget {{ background: transparent; }}
+QScrollBar:vertical {{ width: 10px; background: transparent; margin: 0; }}
+QScrollBar::handle:vertical {{ background: {BORDER}; border-radius: 5px; min-height: 30px; }}
+QScrollBar::handle:vertical:hover {{ background: {MUTED}; }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+QScrollBar:horizontal {{ height: 10px; background: transparent; margin: 0; }}
+QScrollBar::handle:horizontal {{ background: {BORDER}; border-radius: 5px; min-width: 30px; }}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: transparent; }}
 QProgressBar {{ background: {PANEL2}; border: none; border-radius: 4px; }}
 QProgressBar::chunk {{ background: {ACCENT2}; border-radius: 4px; }}
 QToolTip {{ background: {PANEL2}; color: {TEXT}; border: 1px solid {BORDER}; }}

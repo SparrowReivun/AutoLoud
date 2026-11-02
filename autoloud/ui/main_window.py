@@ -344,10 +344,9 @@ class AppsPage(QWidget):
         lay.setContentsMargins(24, 20, 24, 20)
         h = QLabel(t("apps.h")); h.setObjectName("h1"); lay.addWidget(h)
         hint = QLabel(t("apps.hint")); hint.setWordWrap(True); hint.setObjectName("muted"); lay.addWidget(hint)
-        self.scroll = QScrollArea(); self.scroll.setWidgetResizable(True)
-        self.inner = QWidget(); self.inner_lay = QVBoxLayout(self.inner); self.inner_lay.addStretch(1)
-        self.scroll.setWidget(self.inner)
-        lay.addWidget(self.scroll, 1)
+        self.inner = QWidget(); self.inner_lay = QVBoxLayout(self.inner); self.inner_lay.setContentsMargins(0, 0, 0, 0)
+        self.inner_lay.addStretch(1)
+        lay.addWidget(self.inner, 1)
         self._save_timer = QTimer(self); self._save_timer.setSingleShot(True); self._save_timer.setInterval(800)
         self._save_timer.timeout.connect(self.engine.config.save)
 
@@ -509,6 +508,7 @@ class SettingsPage(QWidget):
         self.preset_box.currentTextChanged.connect(self._preset_switched)
         card = Card()
         form = QFormLayout()
+        form.setRowWrapPolicy(QFormLayout.WrapLongRows)    # narrow window: the field drops under its label
         self.spins = {}
         P = cfg.params
         for key, label, lo, hi, step in [
@@ -721,7 +721,9 @@ class MainWindow(QMainWindow):
         for i, (key, icon, page) in enumerate(self._nav_items):
             b = QPushButton(f"{icon}   {t(key)}"); b.setObjectName("navbtn"); b.setCheckable(True)
             b.clicked.connect(lambda _c, i=i: self._go(i))
-            nl.addWidget(b); self.nav_btns.append(b); self.stack.addWidget(page)
+            nl.addWidget(b); self.nav_btns.append(b)
+            sc = QScrollArea(); sc.setWidgetResizable(True); sc.setWidget(page)   # every page scrolls when the window is short
+            self.stack.addWidget(sc)
         nl.addStretch(1)
         self.backend_lbl = QLabel(engine.backend.name); self.backend_lbl.setObjectName("muted")
         nl.addWidget(self.backend_lbl)
