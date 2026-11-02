@@ -93,7 +93,7 @@ class AppConfig:
     sync_default_device: bool = True   # picking a device on the dashboard also makes it the Windows default output
     exit_master_percent: float = 1.0   # master volume to leave on exit / crash (-1 = what it was before start-up; unreliable, off by default)
     master_before_percent: float = -1.0   # the master level found at start-up (persisted so a crash does not lose it)
-    volume_key_step_db: float = 0.5
+    volume_key_step_db: float = 0.4
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
     memory_version: int = 2       # bump to forget every app's remembered gain once
@@ -132,9 +132,9 @@ class AppConfig:
                 cfg.startup_master_percent = 80.0           # the old defaults (40 / 50 / 100 %) moved to 80 % once
             cfg.presets = {str(k): dict(v) for k, v in raw.get("presets", {}).items() if isinstance(v, dict)}
             cfg.active_preset = str(raw.get("active_preset", ""))
-            cfg.volume_key_step_db = float(raw.get("volume_key_step_db", 0.5))
+            cfg.volume_key_step_db = float(raw.get("volume_key_step_db", 0.4))
             if int(raw.get("presets_version", 1)) < 6 and cfg.volume_key_step_db == 1.0:
-                cfg.volume_key_step_db = 0.5                # the old default moved to 0.5 dB once
+                cfg.volume_key_step_db = 0.4                # the old default moved to 0.4 dB once
             cfg.language = raw.get("language", "")
             pr = raw.get("params", {})
             if int(raw.get("config_version", 1)) >= cfg.config_version:
@@ -195,8 +195,8 @@ class AppConfig:
                    steady_under_db=-15.0, safety_margin_db=12.0, safety_land_db=5.0, move_ramp_s=0.2),
         "强力1": dict(onset_below_b_db=7.0, step_up_db=2.0, deadband_up_db=3.0, deadband_down_db=3.0,
                     steady_trigger_db=5.0, steady_over_blocks=2, steady_under_db=-6.0, steady_under_blocks=4,
-                    safety_margin_db=18.0, safety_land_db=4.0, move_ramp_s=0.4, work_silence_s=30.0,
-                    target_mode="source", source_range_db=16.0, source_hold_s=60.0),
+                    safety_margin_db=16.5, safety_land_db=4.0, move_ramp_s=0.4, work_silence_s=10.0,
+                    target_mode="source", source_range_db=10.0, source_hold_s=60.0),
     }
 
     @classmethod
@@ -210,7 +210,7 @@ class AppConfig:
         if not self.presets:
             for name in self.BUILTIN_PRESETS:
                 self.presets[name] = self.builtin_preset(name)
-            self.active_preset = self.DEFAULT_PRESET
+            self.active_preset = self.SOURCE_PRESET          # a fresh config starts in 强力1, the author's mode
             self.params = params_from_dict(self.presets[self.active_preset])
         if self.active_preset not in self.presets:
             self.active_preset = next(iter(self.presets))
