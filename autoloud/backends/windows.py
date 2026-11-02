@@ -34,7 +34,7 @@ from pycaw.constants import AudioSessionState  # type: ignore
 from pycaw.api.mmdeviceapi.depend.structures import PROPERTYKEY  # type: ignore
 from comtypes import GUID  # type: ignore
 
-BACKEND_VERSION = "0.5-comworker-patient"
+BACKEND_VERSION = "0.6-pa-refresh"
 
 # DEVPKEY_Device_FriendlyName = {a45c254e-df1c-4efd-8020-67d146a850e0}, 14
 _PKEY_FRIENDLY_NAME = PROPERTYKEY()
@@ -257,14 +257,35 @@ class WindowsBackend:
         _ = wasapi
         return best
 
+    def _reset_pa(self) -> None:
+        """PortAudio enumerates devices once, at init. After a Bluetooth headset
+        re-pairs (or any device change) its cached device list is stale and
+        opening the loopback fails with 'Invalid sample rate' / 'Invalid
+        device' for ever. A fresh PyAudio instance re-enumerates."""
+        self.stop_capture()
+        try:
+            self._pa.terminate()
+        except Exception:
+            pass
+        self._pa = pyaudio.PyAudio()
+        log.info("PortAudio re-initialised (device list refreshed)")
+
     def start_capture(self, device: OutputDevice, cb: Callable[[np.ndarray], None],
                       block_ms: int = 20) -> tuple[int, int]:
         self.stop_capture()
+        self._cb = cb
+        try:
+            return self._open_capture(device, block_ms)
+        except OSError as e:
+            log.warning("loopback open failed (%s); refreshing the device list and retrying", e)
+            self._reset_pa()
+            return self._open_capture(device, block_ms)
+
+    def _open_capture(self, device: OutputDevice, block_ms: int) -> tuple[int, int]:
         lb = self._find_loopback_index(device)
         fs = int(lb["defaultSampleRate"])
         ch = int(lb["maxInputChannels"])
         frames = max(64, int(fs * block_ms / 1000))
-        self._cb = cb
 
         def _callback(in_data, frame_count, time_info, status):
             try:

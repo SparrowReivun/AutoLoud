@@ -70,6 +70,7 @@ class Engine:
         self._reading_lock = threading.Lock()
         self._last_audio_t = time.perf_counter()
         self._last_capture_retry = -1e9
+        self._capture_failures = 0
         self._thread: threading.Thread | None = None
         self._running = False
         self._calibrating = False
@@ -235,8 +236,11 @@ class Engine:
             log.warning("loopback capture stalled for %.1f s while apps sound: restarting it", now - self._last_audio_t)
             self._event("capture_restart")
             try:
+                if self._capture_failures >= 1 and hasattr(self.backend, "_reset_pa"):
+                    self.backend._reset_pa()          # the last reopen failed: the device list may be stale
                 dev = self._pick_device() or self.device
                 fs, ch = self.backend.start_capture(dev, self._on_audio, block_ms=20)
+                self._capture_failures = 0
                 if self.meter is None or self.meter.fs != fs or self.meter.channels != ch:
                     self.meter = StreamingLoudnessMeter(fs, ch, integration_window_s=60.0)
                 if dev.id != self.device.id:
@@ -248,7 +252,8 @@ class Engine:
                     self._set_state(device=dev, profile=self.profile)
                 self._last_audio_t = now          # give the new stream its grace period
             except Exception:
-                log.exception("capture restart failed")
+                self._capture_failures += 1
+                log.exception("capture restart failed (%d in a row)", self._capture_failures)
         return self._SILENT
 
     # ------------------------------------------------------------------
