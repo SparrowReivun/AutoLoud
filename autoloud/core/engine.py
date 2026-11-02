@@ -169,7 +169,9 @@ class Engine:
     def stop(self, restore: bool = True) -> None:
         self._running = False
         if self._thread is not None:
-            self._thread.join(timeout=2.0)
+            self._thread.join(timeout=6.0)       # a tick can sit in a 5 s COM timeout
+            if self._thread.is_alive():
+                log.warning("control thread still busy at stop; volumes restored anyway (ticks are now no-ops)")
             self._thread = None
         try:
             self.backend.stop_capture()
@@ -467,7 +469,7 @@ class Engine:
         done = getattr(self, "_startup_master_done", set())
         if pct <= 0 or self.profile is None or self.device is None or self.device.id in done:
             return
-        if not getattr(self, "_sessions_parked", False):
+        if not getattr(self, "_sessions_parked", False) or not self._running:
             return          # sessions first (attenuated to the parked gain), master second: no blast
         done.add(self.device.id); self._startup_master_done = done     # once per device per launch
         try:
@@ -721,7 +723,7 @@ class Engine:
         """Rule 7: the user moved the Windows master volume -> that is the new
         comfort level. Re-base the calibration reference so the controller
         does not fight it (and does not need to re-learn anything)."""
-        if self._calibrating or self._applied_master_db is None or self.profile is None:
+        if self._calibrating or self._applied_master_db is None or self.profile is None or not self._running:
             return
         delta = master_db - self._applied_master_db
         if abs(delta) < 0.5:
@@ -800,6 +802,8 @@ class Engine:
         So a fader above 0 dB is realised by raising the master and pulling
         the other apps down by the same amount.
         """
+        if not self._running:
+            return          # stopping: a tick still in flight must not touch the volumes again
         G = cmd.total_db if cmd is not None else 0.0
         cfg = self.config
         # B slider at its very bottom = mute every app that follows the bus
