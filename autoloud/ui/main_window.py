@@ -281,7 +281,7 @@ class DashboardPage(QWidget):
         self._update_thr_label()
         if p is not None and p.calibrated:
             for m in (self.m_mom, self.m_st, self.m_int):
-                m.set_marker("P", p.b_lufs, theme.ACCENT2)
+                m.set_marker("P", p.b_lufs, theme.ACCENT)
             self.prof_lbl.setText(f"{t('b')} = {p.b_lufs:.1f} LUFS · "
                                   f"master ref = {p.master_ref_db:+.1f} dB · {t('genre')}: {p.genre or '—'}")
             self.uncal.hide()
@@ -306,9 +306,9 @@ class DashboardPage(QWidget):
                     self.k_target.setText(f"{c.target_lufs:.1f}  ·  {t('meter.target.hold')}")
             else:
                 self.k_target.setToolTip("")
-            self.m_mom.set_marker("T", c.target_lufs, theme.ACCENT)
-            self.m_st.set_marker("T", c.target_lufs, theme.ACCENT)
-            self.m_int.set_marker("T", c.target_lufs, theme.ACCENT)
+            self.m_mom.set_marker("T", c.target_lufs, theme.ACCENT2)
+            self.m_st.set_marker("T", c.target_lufs, theme.ACCENT2)
+            self.m_int.set_marker("T", c.target_lufs, theme.ACCENT2)
             key = {Phase.IDLE: "status.idle", Phase.ONSET: "status.onset", Phase.ADJUST: "status.adjust",
                    Phase.STEADY: "status.steady", Phase.SAFETY: "status.safety"}[c.phase]
         else:
