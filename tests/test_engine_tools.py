@@ -30,3 +30,20 @@ def test_silent_active_app_gets_auto_switched_off():
         assert cfg.apps.get("music.exe") is None or cfg.apps["music.exe"].auto
     finally:
         eng.stop()
+
+
+def test_meter_drops_garbage_blocks_and_starts_clean():
+    import numpy as np
+    from autoloud.dsp.loudness import StreamingLoudnessMeter
+    m = StreamingLoudnessMeter(48000, 2, integration_window_s=10)
+    rng = np.random.default_rng(1)
+    for _ in range(50):
+        m.process(rng.standard_normal((960, 2)) * 0.05)
+    before = m.reading().short_term
+    m.process(np.full((960, 2), 1e30))                 # an uninitialised buffer from a reopened stream
+    assert m.garbage_blocks == 1
+    r = m.reading()
+    assert r.momentary <= -70 and not r.has_signal      # clean, silent, not +300 LUFS
+    for _ in range(50):
+        m.process(rng.standard_normal((960, 2)) * 0.05)
+    assert abs(m.reading().short_term - before) < 1.0   # back to the same level, no ringing

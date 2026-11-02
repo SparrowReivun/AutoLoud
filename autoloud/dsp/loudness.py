@@ -122,6 +122,8 @@ class StreamingLoudnessMeter:
     def reset_integration(self) -> None:
         self.block_powers.clear()
 
+    garbage_blocks = 0     # blocks dropped as garbage (see process)
+
     def reset(self) -> None:
         self.z1[:] = 0.0
         self.z2[:] = 0.0
@@ -144,6 +146,14 @@ class StreamingLoudnessMeter:
                 x = np.concatenate([x, pad], axis=1)
         x = x.astype(np.float64, copy=False)
         self.last_peak = float(np.max(np.abs(x))) if x.size else 0.0
+        # Garbage in (a stream just (re)opened sometimes hands over an uninitialised or
+        # mis-typed buffer: values of 1e30, NaN): one such block would ring through the
+        # K-filter states and the 60 s window for minutes. Drop it and start clean.
+        if not np.isfinite(self.last_peak) or self.last_peak > 8.0:
+            self.garbage_blocks += 1
+            self.reset()
+            self.last_peak = 0.0
+            return self.reading()
 
         y, self.z1 = lfilter(self.b1, self.a1, x, axis=0, zi=self.z1)
         y, self.z2 = lfilter(self.b2, self.a2, y, axis=0, zi=self.z2)

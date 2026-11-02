@@ -275,6 +275,8 @@ class GainController:
         g_now = self._ramp.value(now)
         new_gain = g_now + delta_db
         est = self._perceived_short_term(now)
+        if est is not None and not (-90.0 < est < 10.0):      # a loopback cannot read that: ignore it
+            est = None
         if self.phase in (Phase.ADJUST, Phase.STEADY) and est is not None:
             new_gain = g_now + (self.t_lufs - est)     # one step to the needed gain
         new_gain = self._clamp(new_gain)
@@ -494,7 +496,7 @@ class GainController:
         during a block and the hidden part (master boost the loopback cannot
         see) is simply that of the current gain.
         """
-        if r.integrated <= ABS_GATE_LUFS:
+        if r.integrated <= ABS_GATE_LUFS or r.integrated > 10.0:    # > +10 LUFS is not audio, it is garbage
             return None
         return r.integrated + self._hidden_gain(self._ramp.value(now))
 

@@ -131,7 +131,10 @@ class Engine:
 
     # ------------------------------------------------------------------
     def start(self, device: OutputDevice | None = None) -> None:
-        self.stop()
+        # Switching devices: do not blast every session back to 100 % on the way
+        # (that is the pop people hear); the new device's sessions get the parked
+        # gain on the first tick instead.
+        self.stop(restore=self._thread is None)
         try:
             self.backend.thread_init()
         except Exception:
@@ -162,7 +165,7 @@ class Engine:
         self._set_state(running=True, device=device, profile=self.profile,
                         enabled=self.config.enabled, error="")
 
-    def stop(self) -> None:
+    def stop(self, restore: bool = True) -> None:
         self._running = False
         if self._thread is not None:
             self._thread.join(timeout=2.0)
@@ -171,7 +174,11 @@ class Engine:
             self.backend.stop_capture()
         except Exception:
             pass
-        self._restore_volumes()
+        if restore:
+            self._restore_volumes()
+        else:
+            self._applied_session_db.clear()
+            self._applied_master_db = None
         self._set_state(running=False)
 
     def _pick_device(self) -> OutputDevice | None:
@@ -243,6 +250,8 @@ class Engine:
                 self._capture_failures = 0
                 if self.meter is None or self.meter.fs != fs or self.meter.channels != ch:
                     self.meter = StreamingLoudnessMeter(fs, ch, integration_window_s=60.0)
+                else:
+                    self.meter.reset()
                 if dev.id != self.device.id:
                     log.info("capture moved to %r", dev.name)
                     self.device = dev
