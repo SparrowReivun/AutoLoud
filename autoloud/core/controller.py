@@ -54,22 +54,22 @@ class Phase(str, Enum):
 class ControllerParams:
     onset_below_b_db: float = 10.0    # the onset floor "A" is this far below B
     onset_guard_lufs: float = -10.0  # assumed loudness of an unknown new source
-    listen_s: float = 5.0            # listen this long before each decision; every step and the onset ramp take this long too
-    step_up_db: float = 1.0          # max raise per step
-    step_down_db: float = 0.8        # max cut per step
-    deadband_up_db: float = 3.0      # a block up to this much ABOVE B still counts as comfortable
-    deadband_down_db: float = 8.0    # a block up to this much BELOW B still counts as comfortable
+    listen_s: float = 2.0            # listen this long before each decision; every step and the onset ramp take this long too
+    step_up_db: float = 1.3          # max raise per step
+    step_down_db: float = 2.0        # max cut per step
+    deadband_up_db: float = 2.0      # a block up to this much ABOVE B still counts as comfortable
+    deadband_down_db: float = 3.0    # a block up to this much BELOW B still counts as comfortable
     snap_db: float = 3.0             # |error| below this: one step exactly to B, ignoring the caps
-    steady_trigger_db: float = 6.0   # steady: blocks above B + this ...
-    steady_over_blocks: int = 2      # ... for this many consecutive blocks restart adjusting
-    steady_under_db: float = -20.0   # steady: blocks below B + this (i.e. B - 20) ...
+    steady_trigger_db: float = 4.5   # steady: blocks above B + this ...
+    steady_over_blocks: int = 1      # ... for this many consecutive blocks restart adjusting
+    steady_under_db: float = -16.0   # steady: blocks below B + this (i.e. B - 20) ...
     steady_under_blocks: int = 3     # ... for this many consecutive blocks restart adjusting
-    safety_margin_db: float = 13.0   # momentary above B + this = protection cut
-    safety_land_db: float = 5.0      # ...which cuts the level down to B + this
-    safety_ramp_s: float = 0.3       # the cut's ramp time (fast but not a click)
-    move_ramp_s: float = 1.8         # ramp of a B-slider move and of a new work's jump to its remembered gain
+    safety_margin_db: float = 14.0   # momentary above B + this = protection cut
+    safety_land_db: float = 2.0      # ...which cuts the level down to B + this
+    safety_ramp_s: float = 0.05       # the cut's ramp time (fast but not a click)
+    move_ramp_s: float = 0.4         # ramp of a B-slider move and of a new work's jump to its remembered gain
     first_time_offset_db: float = -3.0   # unknown app's new work starts this much lower
-    max_master_boost_db: float = 12.0
+    max_master_boost_db: float = 40.0
     min_session_gain_db: float = -120.0  # the gain floor; at the floor the session is muted outright
     work_silence_s: float = 15.0         # silence: per-app -> the work ended; whole mix -> IDLE (onset guard re-armed)
     work_silence_peak: float = 0.003     # near-silence threshold on the session peak meter (~-50 dBFS)

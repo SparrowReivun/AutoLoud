@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from typing import ClassVar
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 
@@ -167,13 +168,32 @@ class AppConfig:
         self.path().write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # ---- parameter presets ----------------------------------------------
-    DEFAULT_PRESET = "default"
+    DEFAULT_PRESET = "默认"
+    # The author's tuned presets, shipped with a fresh config (the ControllerParams
+    # defaults are the 默认 preset). 强力 = faster, bolder steps; 强力1 = source-tracking target.
+    BUILTIN_PRESETS: ClassVar[dict] = {
+        "默认": {},
+        "强力": dict(onset_below_b_db=7.0, step_up_db=2.0, deadband_down_db=6.0, steady_trigger_db=4.0,
+                   steady_under_db=-15.0, safety_margin_db=12.0, safety_land_db=5.0, move_ramp_s=0.2),
+        "强力1": dict(onset_below_b_db=7.0, step_up_db=2.0, deadband_up_db=2.0, deadband_down_db=2.0,
+                    steady_trigger_db=5.0, steady_over_blocks=2, steady_under_db=-6.0, steady_under_blocks=4,
+                    safety_margin_db=12.0, safety_land_db=4.0, move_ramp_s=0.2, work_silence_s=12.0,
+                    target_mode="source", source_range_db=5.0, source_hold_s=60.0),
+    }
+
+    @classmethod
+    def builtin_preset(cls, name: str) -> dict:
+        d = params_dict(ControllerParams())
+        d.update(cls.BUILTIN_PRESETS.get(name, {}))
+        return d
 
     def ensure_presets(self) -> None:
         """Make sure the active preset exists and mirrors the live params."""
         if not self.presets:
-            self.presets[self.DEFAULT_PRESET] = params_dict(self.params)
+            for name in self.BUILTIN_PRESETS:
+                self.presets[name] = self.builtin_preset(name)
             self.active_preset = self.DEFAULT_PRESET
+            self.params = params_from_dict(self.presets[self.active_preset])
         if self.active_preset not in self.presets:
             self.active_preset = next(iter(self.presets))
             self.params = params_from_dict(self.presets[self.active_preset])
@@ -196,11 +216,7 @@ class AppConfig:
             for k in strong_apps:
                 self.mix_for(k).preset = self.STRONG_PRESET
         if old_version < 2 and self.SOURCE_PRESET not in self.presets:
-            base = dict(self.presets.get(self.STRONG_PRESET) or self.presets[self.active_preset])
-            base.update(target_mode="source", source_range_db=5.0, source_hold_s=60.0,
-                        deadband_up_db=1.5, deadband_down_db=1.5,
-                        steady_trigger_db=3.0, steady_under_db=-3.0)
-            self.presets[self.SOURCE_PRESET] = base
+            self.presets[self.SOURCE_PRESET] = self.builtin_preset(self.SOURCE_PRESET)
         elif old_version < 3 and self.SOURCE_PRESET in self.presets:
             # a sliding target must be followed out of steady too: the copied ±4/−15 steady
             # triggers swallowed the whole X range (patched only if still at the copied values)

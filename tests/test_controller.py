@@ -19,7 +19,7 @@ def TP(**kw):
     base = dict(step_up_db=0.5, step_down_db=2.0, deadband_up_db=1.0, deadband_down_db=1.0, snap_db=2.0,
                 steady_trigger_db=5.0, steady_over_blocks=2, steady_under_db=-20.0, steady_under_blocks=4,
                 safety_margin_db=10.0, safety_land_db=5.0, move_ramp_s=1.0, onset_below_b_db=5.0,
-                work_silence_s=2.0)
+                work_silence_s=2.0, listen_s=5.0, safety_ramp_s=0.3, max_master_boost_db=12.0)
     base.update(kw)
     return ControllerParams(**base)
 
