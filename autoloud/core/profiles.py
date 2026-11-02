@@ -89,6 +89,7 @@ class AppConfig:
     presets: dict[str, dict] = field(default_factory=dict)   # name -> ControllerParams as a dict
     active_preset: str = ""
     volume_keys: bool = True      # volume keys / knob adjust B instead of the Windows master volume
+    sync_default_device: bool = True   # picking a device on the dashboard also makes it the Windows default output
     volume_key_step_db: float = 1.0
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
@@ -115,6 +116,7 @@ class AppConfig:
             cfg.music_dir = raw.get("music_dir", "")
             cfg.start_minimized = raw.get("start_minimized", False)
             cfg.volume_keys = bool(raw.get("volume_keys", True))
+            cfg.sync_default_device = bool(raw.get("sync_default_device", True))
             cfg.sidebar_collapsed = bool(raw.get("sidebar_collapsed", False))
             cfg.startup_master_percent = float(raw.get("startup_master_percent", 50.0))
             if int(raw.get("presets_version", 1)) < 4 and cfg.startup_master_percent == 40.0:
@@ -153,6 +155,7 @@ class AppConfig:
             "music_dir": self.music_dir,
             "start_minimized": self.start_minimized,
             "volume_keys": self.volume_keys,
+            "sync_default_device": self.sync_default_device,
             "sidebar_collapsed": self.sidebar_collapsed,
             "startup_master_percent": self.startup_master_percent,
             "presets": self.presets,

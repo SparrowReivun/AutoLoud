@@ -186,6 +186,8 @@ class DashboardPage(QWidget):
         d = dict(d)
         if kind == "new_work":
             d["mode"] = t("ev.mode." + d.get("mode", "mixed"))
+        if kind == "default_device":
+            d["ok"] = t("ev.ok") if d.get("ok") else t("ev.failed")
         if kind == "work":
             d["label"] = (" · " + d["label"]) if d.get("label") else ""
             d["source"] = t("ev.src." + d.get("source", "silence"))
@@ -572,6 +574,8 @@ class SettingsPage(QWidget):
         form.addRow(t("set.startup_master"), self.startup_master)
         self.volkeys = QCheckBox(); self.volkeys.setChecked(cfg.volume_keys)
         form.addRow(t("set.volkeys"), self.volkeys)
+        self.sync_default = QCheckBox(); self.sync_default.setChecked(cfg.sync_default_device)
+        form.addRow(t("set.sync_default"), self.sync_default)
         self.volkey_step = QDoubleSpinBox(); self.volkey_step.setRange(0.1, 6); self.volkey_step.setSingleStep(0.1)
         self.volkey_step.setValue(cfg.volume_key_step_db)
         form.addRow(t("set.volkeys.step"), self.volkey_step)
@@ -585,6 +589,7 @@ class SettingsPage(QWidget):
         self.music_dir.editingFinished.connect(self._changed)
         self.minimized.toggled.connect(self._changed)
         self.volkeys.toggled.connect(self._changed)
+        self.sync_default.toggled.connect(self._changed)
         self.startup_master.setKeyboardTracking(False); self.startup_master.valueChanged.connect(self._changed)
         self.volkey_step.setKeyboardTracking(False); self.volkey_step.valueChanged.connect(self._changed)
         self.lang.currentTextChanged.connect(self._changed)
@@ -683,6 +688,7 @@ class SettingsPage(QWidget):
         cfg.music_dir = self.music_dir.text()
         cfg.start_minimized = self.minimized.isChecked()
         cfg.volume_keys = self.volkeys.isChecked()
+        cfg.sync_default_device = self.sync_default.isChecked()
         cfg.startup_master_percent = float(self.startup_master.value())
         cfg.volume_key_step_db = float(self.volkey_step.value())
         cfg.language = self.lang.currentText()
@@ -821,6 +827,10 @@ class MainWindow(QMainWindow):
         for d in devs:
             if d.id == dev_id:
                 self.engine.start(d)
+                if self.engine.config.sync_default_device and not d.is_default:
+                    ok = self.engine.backend.set_default_output(d)
+                    self.engine._event("default_device", name=d.name, ok=ok)
+                    QTimer.singleShot(800, self.dash.refresh_devices)   # the ★ moves
                 self.engine.config.save()
                 if not self.engine.profile.calibrated:
                     QTimer.singleShot(200, self.run_calibration)

@@ -34,7 +34,37 @@ from pycaw.constants import AudioSessionState  # type: ignore
 from pycaw.api.mmdeviceapi.depend.structures import PROPERTYKEY  # type: ignore
 from comtypes import GUID  # type: ignore
 
-BACKEND_VERSION = "0.6-pa-refresh"
+BACKEND_VERSION = "0.7-policyconfig"
+
+# ---- IPolicyConfig (undocumented, what the Sound control panel uses to set the default device) ----
+from ctypes import c_void_p, c_longlong, POINTER as _PTR  # noqa: E402
+from ctypes.wintypes import LPCWSTR, DWORD, INT  # noqa: E402
+from comtypes import IUnknown, COMMETHOD, HRESULT  # noqa: E402
+
+CLSID_PolicyConfigClient = GUID("{870AF99C-171D-4F9E-AF0D-E63DF40C2BC9}")
+
+
+class IPolicyConfig(IUnknown):
+    """Windows 7+ layout (12 methods). Only SetDefaultEndpoint is used; the
+    others are listed so the vtable slot is right."""
+    _iid_ = GUID("{F8679F50-850A-41CF-9C72-430F290290C8}")
+    _methods_ = [
+        COMMETHOD([], HRESULT, "GetMixFormat", (["in"], LPCWSTR), (["out"], _PTR(c_void_p))),
+        COMMETHOD([], HRESULT, "GetDeviceFormat", (["in"], LPCWSTR), (["in"], INT), (["out"], _PTR(c_void_p))),
+        COMMETHOD([], HRESULT, "ResetDeviceFormat", (["in"], LPCWSTR)),
+        COMMETHOD([], HRESULT, "SetDeviceFormat", (["in"], LPCWSTR), (["in"], c_void_p), (["in"], c_void_p)),
+        COMMETHOD([], HRESULT, "GetProcessingPeriod", (["in"], LPCWSTR), (["in"], INT),
+                  (["out"], _PTR(c_longlong)), (["out"], _PTR(c_longlong))),
+        COMMETHOD([], HRESULT, "SetProcessingPeriod", (["in"], LPCWSTR), (["in"], _PTR(c_longlong))),
+        COMMETHOD([], HRESULT, "GetShareMode", (["in"], LPCWSTR), (["out"], _PTR(c_void_p))),
+        COMMETHOD([], HRESULT, "SetShareMode", (["in"], LPCWSTR), (["in"], c_void_p)),
+        COMMETHOD([], HRESULT, "GetPropertyValue", (["in"], LPCWSTR), (["in"], INT), (["in"], c_void_p),
+                  (["out"], _PTR(c_void_p))),
+        COMMETHOD([], HRESULT, "SetPropertyValue", (["in"], LPCWSTR), (["in"], INT), (["in"], c_void_p),
+                  (["in"], c_void_p)),
+        COMMETHOD([], HRESULT, "SetDefaultEndpoint", (["in"], LPCWSTR), (["in"], DWORD)),
+        COMMETHOD([], HRESULT, "SetEndpointVisibility", (["in"], LPCWSTR), (["in"], INT)),
+    ]
 
 # DEVPKEY_Device_FriendlyName = {a45c254e-df1c-4efd-8020-67d146a850e0}, 14
 _PKEY_FRIENDLY_NAME = PROPERTYKEY()
@@ -227,6 +257,24 @@ class WindowsBackend:
         except Exception:
             log.exception("friendly name failed")
             return ""
+
+    def set_default_output(self, device: OutputDevice) -> bool:
+        """Make this device the Windows default output (all three roles), the
+        way the Sound control panel does. Returns True when Windows confirms."""
+        def f():
+            pc = comtypes.CoCreateInstance(CLSID_PolicyConfigClient, IPolicyConfig, CLSCTX_ALL)
+            for role in (0, 1, 2):          # eConsole, eMultimedia, eCommunications
+                pc.SetDefaultEndpoint(device.id, role)
+            enum = AudioUtilities.GetDeviceEnumerator()
+            now_id = enum.GetDefaultAudioEndpoint(0, 1).GetId()
+            ok = now_id == device.id
+            log.info("Windows default output -> %r: %s", device.name, "ok" if ok else f"not applied (now {now_id})")
+            return ok
+        try:
+            return bool(self._com.call(f))
+        except Exception:
+            log.exception("set_default_output failed")
+            return False
 
     def default_output_device(self) -> OutputDevice | None:
         for d in self.list_output_devices():

@@ -180,6 +180,10 @@ class MockBackend:
         self._thread.start()
         return FS, CH
 
+    def set_default_output(self, device) -> bool:
+        self._default_id = device.id
+        return True
+
     def stop_capture(self) -> None:
         self._running = False
         if self._thread is not None:
