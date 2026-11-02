@@ -307,6 +307,13 @@ class Engine:
                         self._event("work", app=self.config.display_name(app_name), index=work.index,
                                     label=work.label(), source=work.source)
                         self._holds.pop(app_name, None)        # a manual hold ends with the work
+                        # Only a work that is actually sounding re-targets the bus. A media-info
+                        # change in a silent app (a browser tab opened behind a game) used to jump
+                        # the bus to that app's remembered gain and bury whatever was playing.
+                        snd_now = {x.name for x in self._sounding(sessions)}
+                        if app_name not in snd_now:
+                            self._event("work_silent", app=self.config.display_name(app_name))
+                            continue
                         if self.controller is not None and self.config.enabled and self._follows_bus(app_name):
                             mix = self.config.mix_for(app_name)
                             self.controller.notify_new_work(now, self.meter, mix.last_gain_db)

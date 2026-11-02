@@ -22,6 +22,7 @@ _T = {
     "apps.platforms.tip": ("学到的源响度平台（它独自发声时自身响度的第 20 / 80 百分位，去掉全部增益）。强力1 模式的目标 T 在 P−X 到 P 之间按当前源响度处于两个平台之间的位置取值。学习很慢（半衰期约 20 分钟发声时间）；最近两分钟大部分比低平台还低 6 LU 以上（比如你把应用内音量调小了）会自动重建；调大了不会自动重建——那时 u 封顶在 1，目标就是 P，不会出事，慢慢学或点「重学」即可。", "Learned source-loudness platforms (20th / 80th percentile of its own loudness while sounding alone, every gain taken out). In the 强力1 mode the target T sits between P−X and P by where the current source loudness lies between them. Learning is slow (half-life ~20 min of sounding time); when most of the last two minutes sit 6 LU or more below the quiet platform (e.g. you turned the app's own volume down) the picture is rebuilt; a louder shift is not auto-detected (u clips at 1 and T = P, so nothing goes wrong) - the slow learner or Relearn covers it."),
     "apps.relearn": ("重学", "Relearn"),
     "apps.relearn.tip": ("忘掉学到的平台，从头学（比如你改了应用内的音量设置）。", "Forget the learned platforms and start over (e.g. after changing the app's own volume setting)."),
+    "ev.work_silent": ("{app} 换了作品但没在发声：总线增益不动", "{app} changed work while silent: bus gain left alone"),
     "ev.capture_restart": ("回录采集停了（设备切换 / 蓝牙重连），正在重新打开", "Loopback capture stalled (device change / Bluetooth), reopening it"),
     "ev.app_preset": ("{app} 的预设改为「{name}」", "{app}: preset → \u201c{name}\u201d"),
     "ev.mode_app": ("总线按「{name}」运行（{app} 独自发声）", "Bus runs with \u201c{name}\u201d ({app} sounding alone)"),

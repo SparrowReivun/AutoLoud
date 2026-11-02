@@ -2,6 +2,7 @@
 
 ## 0.4.1 — 2026-11-02
 
+- A new work in an app that is not sounding (a browser tab changing its media title behind a game) no longer re-targets the bus: it used to jump the gain to that app's remembered value and bury whatever was playing (seen 18:28 with chrome.exe behind ZenlessZoneZero: −13.9 dB, 28 s to climb back). The activity log notes "changed work while silent: bus gain left alone".
 - Windows build is now a folder (`AutoLoud-windows.zip`, run `AutoLoud\AutoLoud.exe` inside) instead of a single self-extracting exe - the one-file layout is the classic antivirus false-positive trigger ("trojan" warnings reported by downloaders). README explains the warnings and how to verify; docs/RELEASING.md has the false-positive submission steps.
 - The 强力1 preset shipped with a fresh config follows the author's current tuning (dead band ±3 dB, steady trigger 3 dB, 2 s moves, X = 16 LU).
 - README (all five languages): new intro, principles 5-7 (hearing protection, per-app volume control, enjoy the sound), zip download steps.
