@@ -473,6 +473,7 @@ class Engine:
             except Exception:
                 self._master_before = None
             self.backend.set_master_scalar(self.device, max(0.0, min(1.0, pct / 100.0)))
+            self._master_parked = max(0.0, min(1.0, pct / 100.0))
             self.profile.master_ref_db = self.backend.get_master_db(self.device)
             self._applied_master_db = None
             log.info("startup: master volume set to %.0f%% (%.1f dB) and taken as the reference", pct, self.profile.master_ref_db)
@@ -713,6 +714,29 @@ class Engine:
         if abs(delta) < 0.5:
             return
         p = self.profile
+        if self.config.volume_keys:
+            # The keys / knob mean "P", but the hook cannot see them while an elevated
+            # window (most games with anti-cheat) is in front: Windows then moves the
+            # master itself. Read that move as the key presses it was, nudge P by the
+            # configured step per press (Windows steps the master 2 % per press), and
+            # park the master again so the next press still has somewhere to go.
+            try:
+                sc = float(self.backend.get_master_scalar(self.device))
+            except Exception:
+                sc = None
+            parked = getattr(self, "_master_parked", None)
+            presses = max(1, int(round(abs(sc - parked) / 0.02))) if (sc is not None and parked is not None) else 1
+            presses = min(presses, 10)
+            step = self.config.volume_key_step_db * presses * (1 if delta > 0 else -1)
+            if parked is not None:
+                try:
+                    self.backend.set_master_scalar(self.device, parked)
+                except Exception:
+                    log.exception("re-park master")
+            log.info("master moved by %+.1f dB behind the hook (%d press(es)): P %+.1f dB, master parked again", delta, presses, step)
+            self._event("volkey_master", delta=step, presses=presses)
+            self.nudge_b(step)
+            return
         p.master_ref_db += delta
         if p.master_visible_in_loopback:      # loopback moved too: targets move with it
             p.b_lufs += delta

@@ -59,8 +59,8 @@ _T = {
     "ev.failed": ("未生效，Windows 拒绝了", "not applied, Windows refused"),
     "set.sync_default": ("首页切换输出设备时，同时把它设为 Windows 的默认输出设备", "Picking an output device on the dashboard also makes it the Windows default output"),
     "ev.default_device": ("Windows 默认输出设备 → {name}（{ok}）", "Windows default output → {name} ({ok})"),
-    "dash.volkeys.note": ("音量键 / 旋钮现在调的是舒适响度 P，不再改 Windows 主音量（主音量由程序管理；设置页可关）。",
-                          "Volume keys / knob now move the comfort level P, not the Windows master volume (the master is managed by AutoLoud; can be switched off on the Settings page)."),
+    "dash.volkeys.note": ("音量键 / 旋钮现在调的是舒适响度 P，不再改 Windows 主音量（主音量由程序管理；全屏游戏里按键被系统拿走时也会被换算成 P；设置页可关）。",
+                          "Volume keys / knob now move the comfort level P, not the Windows master volume (the master is managed by AutoLoud; a press Windows takes in a full-screen game is converted to P as well; can be switched off on the Settings page)."),
     "dash.b.hint": ("像音量旋钮一样拖：声音立刻跟着变，停下的位置就是新的目标 P。拖到来源本身达不到的位置时，提升会停在主音量余量的上限（不会削波）。",
                     "Drag it like a volume knob: the sound follows at once and where you stop becomes the new target P. Beyond what the source can reach, the boost stops at the master-volume headroom (no clipping)."),
     "act.off": ("自动响度未在工作", "Auto loudness is not running"),
@@ -115,11 +115,11 @@ _T = {
     "cal.intro.h": ("准备", "Before you start"),
     "cal.intro": (
         "1. 戴好耳机 / 打开音箱，选择要校准的输出设备。\n"
-        "2. 把外部设备（耳机放大器、音箱、蓝牙耳机）调到你平时偏响一点的位置，校准后不要再动它。Windows 主音量由 AutoLoud 管理（启动时设为 100%），不用动。\n"
+        "2. 把外部设备（耳机放大器、音箱、蓝牙耳机）调到你平时偏响一点的位置，校准后不要再动它。Windows 主音量由 AutoLoud 管理（启动时设为 80%），不用动。\n"
         "3. 暂停其它正在播放声音的程序，否则会影响测量。\n\n"
         "接下来播放一首你喜欢的音乐，把推子从 0 慢慢拉高到你觉得舒适的听音音量——这就是全部的校准。",
         "1. Put on your headphones / turn on your speakers and pick the device to calibrate.\n"
-        "2. Set your external device (headphone amp, speakers, Bluetooth headset) a little louder than you usually have it and leave it there afterwards. The Windows master volume is managed by AutoLoud (set to 100 % at start); leave it alone.\n"
+        "2. Set your external device (headphone amp, speakers, Bluetooth headset) a little louder than you usually have it and leave it there afterwards. The Windows master volume is managed by AutoLoud (set to 80 % at start); leave it alone.\n"
         "3. Pause anything else that is playing.\n\n"
         "Next, play a piece of music you like and slowly raise the fader from 0 to the level you find comfortable — that is the whole calibration."),
     "cal.music.h": ("舒适响度 P", "Comfort level P"),
@@ -217,6 +217,7 @@ _T = {
     "set.startup_master": ("启动时把 Windows 主音量设为 (%)，0 = 不动", "Set the Windows master volume on start (%), 0 = leave it"),
     "set.volkeys": ("用音量键 / 音量旋钮调节舒适响度 P（接管 F11/F12 等，不再动 Windows 主音量）", "Volume keys / knob adjust comfort level P (intercepts F11/F12 etc.; the Windows master volume is left alone)"),
     "set.volkeys.step": ("每按一下调多少 (dB)", "Per key press (dB)"),
+    "ev.volkey_master": ("音量键被系统拿走了（前台是管理员窗口）→ 当作按了 {presses} 下：P {delta:+.1f} dB，主音量放回原位", "Volume key went to Windows (elevated window in front) → read as {presses} press(es): P {delta:+.1f} dB, master parked again"),
     "ev.volkey": ("音量键：P {delta:+.1f} dB → {b:.1f} LUFS", "Volume key: P {delta:+.1f} dB → {b:.1f} LUFS"),
     "set.lang": ("语言 / Language", "Language / 语言"),
     "set.save": ("保存设置", "Save settings"),
