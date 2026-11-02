@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 — 2026-11-02
+
+- Windows build is now a folder (`AutoLoud-windows.zip`, run `AutoLoud\AutoLoud.exe` inside) instead of a single self-extracting exe - the one-file layout is the classic antivirus false-positive trigger ("trojan" warnings reported by downloaders). README explains the warnings and how to verify; docs/RELEASING.md has the false-positive submission steps.
+- The 强力1 preset shipped with a fresh config follows the author's current tuning (dead band ±3 dB, steady trigger 3 dB, 2 s moves, X = 16 LU).
+- README (all five languages): new intro, principles 5-7 (hearing protection, per-app volume control, enjoy the sound), zip download steps.
+
 ## 0.4.0 — 2026-11-02
 
 - New built-in preset 强力1 (source-tracking target): the target T is no longer fixed at B but slides between B − X and B with the sounding app's own loudness - u = clip((L_src − C_low) / (C_high − C_low), 0, 1), T = (B − X) + X·u, X = 5 LU by default. Each app slowly learns its two platforms C_low / C_high (20th / 80th percentile of its source loudness while sounding alone; half-life ~20 min of sounding time; shown in the mixer with a Relearn button; a downward shift of the whole picture - the app's own volume turned down - rebuilds it from the last two minutes). u is refreshed once per listening block from the 3 s short-term reading; while nothing is attributable T is held, after 60 s without a reading it is B again; without ready platforms it is B. New preset parameters: target mode, X, fall-back time, and "strong: cut pulls fader" (the old per-app strong tick). 强力1 ships with a ±1.5 dB dead band so the sliding target is actually followed.

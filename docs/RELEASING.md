@@ -1,6 +1,6 @@
 # 如何发布一个新版本 / How to cut a release
 
-发布 = 打一个 `v*` 标签并推到 GitHub。GitHub Actions 看到标签后会自动：跑测试 → 在 Windows 上用 PyInstaller 打包 → 冒烟测试 exe → 创建 Release 并附上 `AutoLoud.exe`。整个过程约 5–10 分钟，不需要本机装任何东西。
+发布 = 打一个 `v*` 标签并推到 GitHub。GitHub Actions 看到标签后会自动：跑测试 → 在 Windows 上用 PyInstaller 打包 → 冒烟测试 exe → 创建 Release 并附上 `AutoLoud-windows.zip`（目录版：解压后运行 `AutoLoud\AutoLoud.exe`；不再打单文件 exe，因为自解压单文件是杀毒软件误报的头号原因）。整个过程约 5–10 分钟，不需要本机装任何东西。
 
 ## 每次发布的步骤
 
@@ -16,7 +16,18 @@
    git tag -a vx.y.z -m "AutoLoud x.y.z"
    git push origin vx.y.z
    ```
-4. 打开仓库的 **Actions** 页面看进度；成功后 **Releases** 页面会出现 `vx.y.z`，附带 `AutoLoud.exe`。把那个页面的链接发给别人即可。
+4. 打开仓库的 **Actions** 页面看进度；成功后 **Releases** 页面会出现 `vx.y.z`，附带 `AutoLoud-windows.zip`。把那个页面的链接发给别人即可。
+
+## 发布后：向杀毒厂商报误报
+
+没有代码签名的新程序常被 Defender / 360 / 火绒按启发式规则误判为木马（全局键盘钩子 + 回录采集 + 控制各应用音量，叠在一个没有信誉记录的 exe 上）。每个版本发布后做一次：
+
+1. 从 Release 下载 `AutoLoud-windows.zip`，解压。
+2. Microsoft：打开 https://www.microsoft.com/en-us/wdsi/filesubmission ，选 "Software developer"，上传 `AutoLoud.exe`（或整个 zip），在说明里写明是开源项目并附仓库地址；通常 1–2 天内放行，Defender 云端更新后其他用户就不再报。
+3. 360 / 火绒 / 腾讯等国内厂商：各自官网都有「误报申诉 / 白名单」入口，流程相同。
+4. 可选：把 exe 传到 https://www.virustotal.com 留一个检测结果链接，放进 Release 说明里，方便用户自己核对。
+
+根治办法是代码签名证书（OV 每年约 100–300 美元；EV 更贵但立即免 SmartScreen）。学校有时提供签名服务，可以先问 QMUL IT。
 
 ## 版本号怎么定
 

@@ -8,7 +8,7 @@
 
 </div>
 
-AutoLoud is an automatic loudness control project. It learns your listening preference from the volume adjustments you make, combines it with each application's loudness history, and adjusts the volume for you while content plays — fewer manual corrections, while keeping as much of the content's own dynamics as possible.
+AutoLoud redefines volume control for a new era. Nothing to learn: install it, keep adjusting the volume as you always do, and it learns the loudness you like and keeps every future sound inside your comfortable range — far fewer manual corrections, while the dynamics of well-made content are preserved.
 
 ![AutoLoud dashboard](assets/screenshot-dashboard.png)
 
@@ -24,9 +24,11 @@ AutoLoud lets you state that goal directly. Through the volume adjustments you a
 
 ## Download and install
 
-1. Download the latest `AutoLoud.exe` from [Releases](https://github.com/SparrowReivun/AutoLoud/releases) (a single file, about 100 MB, no Python needed).
-2. Double-click it. On first launch Windows SmartScreen may say "Windows protected your PC" — click "More info → Run anyway". The exe is not code-signed, which is why.
+1. Download the latest `AutoLoud-windows.zip` from [Releases](https://github.com/SparrowReivun/AutoLoud/releases) (about 100 MB, no Python needed).
+2. Unzip it anywhere and run `AutoLoud.exe` inside (keep the folder together: the files next to the exe are needed). On first launch Windows SmartScreen may say "Windows protected your PC" — click "More info → Run anyway".
 3. The calibration wizard opens by itself and takes two minutes. AutoLoud then minimizes to the tray and works quietly.
+
+**About antivirus warnings**: AutoLoud is not code-signed (certificates cost money), and it hooks the volume keys (a global keyboard hook), captures the system loopback and controls each application's volume — that combination, in a brand-new program with no reputation yet, is sometimes flagged as a trojan by the heuristics of Defender, 360 and others. It is open source: compare with the code or check the exe on VirusTotal; we submit a false-positive report to Microsoft for every release. If in doubt, run it from source as described below.
 
 The interface follows the Windows display language (Chinese or English) and can be switched on the Settings page.
 
@@ -66,11 +68,23 @@ Early versions tried to hold loudness inside a narrow fixed band. Real-world tes
 
 AutoLoud gradually learns each application's distribution of source loudness, then combines it with your preference to map the different loudness levels onto their own target range.
 
+### 5. Hearing protection
+
+Sounds that are too loud are pulled down automatically, protecting your hearing.
+
+### 6. Per-application volume control
+
+Take back control of every program's sound — above all programs such as WeChat whose notifications are far too loud yet offer no volume setting. Each application can be given its own permanent volume preference, so sudden ring-tone blasts are a thing of the past. Rich customisation hooks are there for advanced users.
+
+### 7. Let everyone simply enjoy the sound
+
+— and forget about volume adjustment, and about this program, altogether.
+
 ## How it works
 
 ### Learning each application's loudness profile
 
-When exactly one application is sounding, the system can work back to its source loudness L_src (every gain removed) and update two reference values for that application:
+When one application is sounding on its own, the system can work back to its source loudness L_src (every gain removed) and update two reference values for that application:
 
 | Parameter | Meaning |
 | --- | --- |

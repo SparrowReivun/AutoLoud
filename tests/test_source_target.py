@@ -79,8 +79,8 @@ def test_migration_adds_the_source_preset_and_moves_strong_ticks_to_a_preset():
     cfg.migrate_presets(1, ["Weixin.exe"])
     assert cfg.SOURCE_PRESET in cfg.presets
     sp = cfg.presets[cfg.SOURCE_PRESET]
-    assert sp["target_mode"] == "source" and sp["source_range_db"] == 5.0
-    assert sp["deadband_up_db"] == 2.0 and sp["deadband_down_db"] == 2.0 and sp["steady_under_db"] == -6.0
+    assert sp["target_mode"] == "source" and sp["source_range_db"] == 16.0
+    assert sp["deadband_up_db"] == 3.0 and sp["deadband_down_db"] == 3.0 and sp["steady_under_db"] == -6.0
     assert cfg.presets[cfg.STRONG_PRESET]["cut_pulls_fader"] is True
     assert cfg.apps["Weixin.exe"].preset == cfg.STRONG_PRESET
     assert cfg.params.target_mode == "fixed"           # the active preset is untouched
