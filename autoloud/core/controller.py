@@ -57,6 +57,7 @@ class ControllerParams:
     listen_s: float = 2.0            # listen this long before each decision; every step and the onset ramp take this long too
     step_up_db: float = 1.3          # max raise per step
     step_down_db: float = 2.0        # max cut per step
+    step_fraction: float = 0.5       # far from T, a step is at least this fraction of the error (0 = only the caps above)
     deadband_up_db: float = 2.0      # a block up to this much ABOVE B still counts as comfortable
     deadband_down_db: float = 3.0    # a block up to this much BELOW B still counts as comfortable
     snap_db: float = 3.0             # |error| below this: one step exactly to B, ignoring the caps
@@ -520,7 +521,9 @@ class GainController:
             self._up_streak = 0
             step = error
         elif error > 0:
-            up = p.step_up_db
+            # far off: at least step_fraction of the error per step (halves the gap each
+            # block by default), never less than the per-step cap
+            up = max(p.step_up_db, p.step_fraction * error)
             pre = self._pre_safety_gain
             if pre is not None and g < pre:            # recovering from a protection cut
                 up = max(up, min(p.step_down_db, pre - g))
@@ -528,7 +531,8 @@ class GainController:
         else:
             self._up_streak = 0
             # too loud right after a new work / onset: go all the way in one step
-            step = error if self._fresh else max(-p.step_down_db, error)
+            down = max(p.step_down_db, p.step_fraction * -error)
+            step = error if self._fresh else max(-down, error)
         self._fresh = False
         if self._pre_safety_gain is not None and g + step >= self._pre_safety_gain:
             self._pre_safety_gain = None               # back where we were: normal rules again

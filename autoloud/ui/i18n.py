@@ -170,6 +170,7 @@ _T = {
     "set.worksilence": ("静音判定 (s)：应用静音这么久算作品结束；全部静音这么久进入待机", "Silence (s): an app silent this long ends its work; everything silent this long → idle"),
     "set.listen": ("步长 (s)：每段听多久，每步渐变和起始保护也用这个时间", "Block length (s): listen time, and the ramp time of every step and of the onset guard"),
     "set.stepup": ("每步最多调高 (dB)", "Max raise per step (dB)"),
+    "set.stepfrac": ("离目标远时每步至少调误差的这个比例（0 = 只按上面两条上限）", "Far from the target, a step is at least this fraction of the error (0 = only the caps above)"),
     "set.stepdown": ("每步最多调低 (dB)，新作品首次偏响则一步到位", "Max cut per step (dB); a new work's first cut goes all the way"),
     "set.deadband_up": ("算作「已舒适」：比 T 高不超过 (dB)", "Comfortable: up to this much above T (dB)"),
     "set.deadband_down": ("算作「已舒适」：比 T 低不超过 (dB)", "Comfortable: up to this much below T (dB)"),

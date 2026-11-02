@@ -19,7 +19,7 @@ def TP(**kw):
     base = dict(step_up_db=0.5, step_down_db=2.0, deadband_up_db=1.0, deadband_down_db=1.0, snap_db=2.0,
                 steady_trigger_db=5.0, steady_over_blocks=2, steady_under_db=-20.0, steady_under_blocks=4,
                 safety_margin_db=10.0, safety_land_db=5.0, move_ramp_s=1.0, onset_below_b_db=5.0,
-                work_silence_s=2.0, listen_s=5.0, safety_ramp_s=0.3, max_master_boost_db=12.0)
+                work_silence_s=2.0, listen_s=5.0, safety_ramp_s=0.3, max_master_boost_db=12.0, step_fraction=0.0)
     base.update(kw)
     return ControllerParams(**base)
 
@@ -285,3 +285,21 @@ def test_asymmetric_dead_band():
     assert log[-1][2].phase == Phase.STEADY and abs(log[-1][2].total_db) < 1e-6
     log = run_sim(lambda t: -18.0, 12.0, T(), P, hook=hook)
     assert log[-1][2].total_db < -1.0
+
+
+def test_far_from_target_steps_are_proportional_to_the_error():
+    """A source 8 dB too loud (under the protection trigger): with step_fraction
+    the gap halves every block instead of creeping down by the 2 dB cap."""
+    def hook(ctl, meter, t):
+        if t == 0.0:
+            ctl.phase = Phase.STEADY; ctl._last_signal_t = 0.0; ctl._ramp.retarget(0.0, 0.0, 0.0); ctl._arm_block(0.0, meter)
+    src = lambda t: -22.0 if t < 5 else -14.0
+    slow = run_sim(src, 60.0, T(), params=TP(step_fraction=0.0), hook=hook)
+    fast = run_sim(src, 60.0, T(), params=TP(step_fraction=0.5), hook=hook)
+    def settled_at(log):
+        for t, p, c in log:
+            if t > 6 and p is not None and p < -22 + 2.0:
+                return t
+        return 1e9
+    assert settled_at(fast) < settled_at(slow) - 8, (settled_at(fast), settled_at(slow))
+    assert min(c.total_db for t, p, c in fast) > -10          # proportional, never a wild overshoot

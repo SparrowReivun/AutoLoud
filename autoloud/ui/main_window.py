@@ -529,6 +529,7 @@ class SettingsPage(QWidget):
             ("listen_s", "set.listen", 2, 30, 1),
             ("step_up_db", "set.stepup", 0.1, 6, 0.1),
             ("step_down_db", "set.stepdown", 0.5, 12, 0.5),
+            ("step_fraction", "set.stepfrac", 0, 1, 0.1),
             ("deadband_up_db", "set.deadband_up", 0, 15, 0.5),
             ("deadband_down_db", "set.deadband_down", 0, 30, 0.5),
             ("snap_db", "set.snap", 0.5, 6, 0.5),
