@@ -81,7 +81,7 @@ class DashboardPage(QWidget):
         bcard = Card()
         brow = QHBoxLayout()
         self.b_lbl = QLabel(t("dash.b")); brow.addWidget(self.b_lbl)
-        self.b_slider = NoWheelSlider(Qt.Horizontal); self.b_slider.setRange(-600, 0)   # x0.1 LUFS
+        self.b_slider = NoWheelSlider(Qt.Horizontal); self.b_slider.setRange(-900, 0)   # x0.1 LUFS, bottom = mute
         self.b_slider.setTickPosition(QSlider.TicksBelow); self.b_slider.setTickInterval(100)
         self.b_slider.setSingleStep(1); self.b_slider.setPageStep(10)
         self.b_slider.valueChanged.connect(self._b_changed)
@@ -224,7 +224,7 @@ class DashboardPage(QWidget):
 
     def _b_changed(self, v):
         self.engine.set_target_b(v / 10.0)
-        self.b_val.setText(t("dash.b.mute") if v <= -600 else f"{v / 10.0:.1f} LUFS")
+        self.b_val.setText(t("dash.b.mute") if v <= -900 else f"{v / 10.0:.1f} LUFS")
 
     def _thr_changed(self, v):
         self.engine.config.params.safety_margin_db = v / 2.0
@@ -278,7 +278,7 @@ class DashboardPage(QWidget):
             v = int(round(p.b_lufs * 10))
             if v != self.b_slider.value():
                 self.b_slider.blockSignals(True); self.b_slider.setValue(v); self.b_slider.blockSignals(False)
-            self.b_val.setText(t("dash.b.mute") if p.b_lufs <= -59.95 else f"{p.b_lufs:.1f} LUFS")
+            self.b_val.setText(t("dash.b.mute") if p.b_lufs <= -89.95 else f"{p.b_lufs:.1f} LUFS")
         mv = int(round(self.engine.config.params.safety_margin_db * 2))
         if mv != self.thr_slider.value() and not self.thr_slider.isSliderDown():
             self.thr_slider.blockSignals(True); self.thr_slider.setValue(mv); self.thr_slider.blockSignals(False)

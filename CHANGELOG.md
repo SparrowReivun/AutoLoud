@@ -2,6 +2,7 @@
 
 ## 0.4.1 — 2026-11-02
 
+- Dashboard meters and the P slider now run from −90 to 0 LUFS (were −60); the slider's bottom (−90) is mute.
 - Exit pop (since the master became managed): a control tick still in flight after the volumes were restored re-parked the master at 80 % under sessions already back at 100 %. Ticks are no-ops once stopping, and stop waits up to 6 s for the thread.
 - On exit / crash the Windows master volume is set to 1 % (Settings), and it is set before the sessions return to 100 % - that order was the exit pop. (Restoring the pre-launch master level was dropped: unreliable across crashes.)
 - The master level found at start-up is remembered on disk, so it is put back on exit even after a crash left the master parked (before, a second launch saw 80 % and "restored" 80 %). Unhandled Python exceptions and interpreter exit now also put the volumes back. Settings: "master volume to leave on exit / crash (%)" (−1 = the start-up value; e.g. 1 for a near-mute).

@@ -11,7 +11,7 @@ from autoloud.ui import theme
 class LoudnessBar(QWidget):
     """Horizontal LUFS bar from -60 to 0 with markers for A, B and target."""
 
-    LO, HI = -60.0, 0.0
+    LO, HI = -90.0, 0.0
 
     def __init__(self, label: str, parent=None):
         super().__init__(parent)
