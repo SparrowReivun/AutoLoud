@@ -18,9 +18,10 @@ from typing import Callable
 import numpy as np
 
 from autoloud.backends.base import AudioSession, Backend, OutputDevice
-from autoloud.core.controller import GainCommand, GainController, Phase
+from autoloud.core.controller import ControllerParams, GainCommand, GainController, Phase
 from autoloud.core.profiles import AppConfig, DeviceProfile
 from autoloud.dsp.loudness import LoudnessReading, MIN_LUFS, StreamingLoudnessMeter
+from autoloud.core.platforms import PlatformModel
 from autoloud.core.works import WorkTracker, WorkInfo
 
 log = logging.getLogger(__name__)
@@ -45,6 +46,8 @@ class EngineState:
     safety_active: bool = False      # protection cut in force (notice should be showing)
     safety_count: int = 0            # increments on every new cut (UI shows the notice on change)
     error: str = ""
+    source: tuple = ("", None, None, None)   # (sole app, its source LUFS, platform lo, platform hi)
+    mode_name: str = ""                       # preset the bus is running with right now
 
 
 B_MUTE_LUFS = -60.0   # the B slider's bottom: auto apps are muted outright
@@ -90,6 +93,9 @@ class Engine:
                                  media=self.media)
         self.listeners: list[Callable[[EngineState], None]] = []
         self._last_cmd: GainCommand | None = None
+        self._platforms: dict[str, PlatformModel] = {}   # app -> learned source-loudness picture
+        self._param_override: str = ""                   # preset name the sole app switched the bus to ("" = dashboard mode)
+        self._source_now: tuple[str, float | None, float | None, float | None] = ("", None, None, None)
 
     @staticmethod
     def _make_media_provider():
@@ -190,7 +196,8 @@ class Engine:
 
     def apply_params(self) -> None:
         if self.controller is not None:
-            self.controller.params = self.config.params
+            self.controller.params = (self.config.params_for_preset(self._param_override)
+                                      if self._param_override else self.config.params)
         self.works.silence_s = self.config.params.work_silence_s
         self.works.silence_peak = self.config.params.work_silence_peak
 
@@ -228,6 +235,7 @@ class Engine:
                         self.meter_log.apps(sessions, self._last_cmd.total_db if self._last_cmd else 0.0,
                                             {k: v.offset_db for k, v in self.config.apps.items()},
                                             sole, sm, ss)
+                    self._source_poll(sessions, r, now)
                     self._startup_master()
                     for s in self._sounding(sessions):
                         if now - self._sound_last.get(s.name, -1e9) > 1.0:
@@ -308,6 +316,8 @@ class Engine:
                 self._set_state(reading=r, command=cmd, calibrating=self._calibrating,
                                 enabled=self.config.enabled, activity=activity,
                                 events=list(self._events), error="",
+                                source=self._source_now,
+                                mode_name=self._param_override or self.config.active_preset,
                                 safety_active=(cmd is not None and cmd.phase.value == "safety"),
                                 safety_count=self._safety_count)
             except TimeoutError:
@@ -471,7 +481,7 @@ class Engine:
             return
         s = max(snd, key=lambda x: x.peak)
         mix = self.config.mix_for(s.name)
-        if not mix.strong:
+        if not self.params_for_app(s.name).cut_pulls_fader:
             return
         excess = cmd.perceived_lufs - (self.profile.b_lufs - self.STRONG_HEADROOM_DB)
         if excess <= 0.5:
@@ -482,14 +492,72 @@ class Engine:
         self._event("strong_cut", app=self.config.display_name(s.name), excess=excess, off=mix.offset_db)
         self.mixer_changed()
 
-    def set_strong(self, app_name: str, on: bool) -> None:
-        """Mixer checkbox. The fader is left where it is; from now on (on) or
-        no longer (off) every protection cut this app trips pulls its fader down."""
+    def set_app_preset(self, app_name: str, preset: str) -> None:
+        """Mixer drop-down: the parameter preset the bus runs with while this
+        app sounds alone ("" = whatever the dashboard mode is)."""
         mix = self.config.mix_for(app_name)
-        mix.strong = on
-        self._event("strong_on" if on else "strong_off", app=self.config.display_name(app_name), off=mix.offset_db)
+        if preset and preset not in self.config.presets:
+            preset = ""
+        mix.preset = preset
+        self._event("app_preset", app=self.config.display_name(app_name), name=preset or "—")
         self._dirty = True
         self.mixer_changed()
+
+    def params_for_app(self, app_name: str) -> ControllerParams:
+        mix = self.config.apps.get(app_name)
+        if mix is not None and mix.preset and mix.preset in self.config.presets:
+            return self.config.params_for_preset(mix.preset)
+        return self.config.params
+
+    def platform_for(self, app_name: str) -> PlatformModel:
+        m = self._platforms.get(app_name)
+        if m is None:
+            m = PlatformModel.from_dict(self.config.mix_for(app_name).platforms)
+            self._platforms[app_name] = m
+        return m
+
+    def reset_platforms(self, app_name: str) -> None:
+        """Mixer button: forget the app's learned platforms (e.g. its own volume setting changed)."""
+        self._platforms[app_name] = PlatformModel()
+        self.config.mix_for(app_name).platforms = None
+        self._dirty = True
+        self._event("platform_reset", app=self.config.display_name(app_name))
+
+    def _source_poll(self, sessions: list[AudioSession], r, now: float) -> None:
+        """Every session poll: learn the sole sounding app's platforms, feed
+        the controller its position for the source-tracking target, and run
+        the bus with that app's own preset if it has one."""
+        sole, _sm, ss = self.source_loudness(sessions, r, self._last_cmd)
+        lo = hi = None
+        if sole and ss is not None:
+            m = self.platform_for(sole)
+            if m.add(ss):
+                log.info("%s: source level shifted; platforms rebuilt from the last two minutes", sole)
+                self._event("platform_shift", app=self.config.display_name(sole))
+            lo, hi = m.platforms
+            if not m.ready:
+                lo = hi = None
+            if now - getattr(self, "_last_platform_store", 0.0) > 30.0:   # persist slowly (every 30 s)
+                self._last_platform_store = now
+                for name, pm in self._platforms.items():
+                    if pm.weight > 0:
+                        self.config.mix_for(name).platforms = pm.to_dict()
+                self._dirty = True
+        self._source_now = (sole, ss, lo, hi)
+        if self.controller is not None:
+            self.controller.set_source(now, ss if sole else None, lo, hi)
+        # the sole app's own preset drives the bus while it sounds alone
+        snd = self._sounding(sessions)
+        want = ""
+        if len(snd) == 1:
+            mix = self.config.apps.get(snd[0].name)
+            if mix is not None and mix.preset in self.config.presets and mix.preset != self.config.active_preset:
+                want = mix.preset
+        if want != self._param_override:
+            self._param_override = want
+            self.apply_params()
+            self._event("mode_app", name=want or self.config.active_preset,
+                        app=self.config.display_name(snd[0].name) if snd else "")
 
     def _boost_cap_db(self) -> float:
         """How far the master volume can really be raised above the calibration

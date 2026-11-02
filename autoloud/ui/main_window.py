@@ -59,6 +59,8 @@ class DashboardPage(QWidget):
         self._fill_modes()
         self.mode_box.currentTextChanged.connect(self._mode_changed)
         top.addWidget(self.mode_box)
+        self.mode_note = QLabel(""); self.mode_note.setObjectName("muted")
+        top.addWidget(self.mode_note)
         lay.addLayout(top)
 
         self.status = badge(t("status.idle"))
@@ -293,6 +295,16 @@ class DashboardPage(QWidget):
             at_cap = c.master_offset_db >= min(cap, self.engine.config.params.max_master_boost_db) - 0.05 and c.master_offset_db > 0
             self.k_master.setText(f"{c.master_offset_db:+.1f} dB" + ("  " + t("gain.master.cap") if at_cap else ""))
             self.k_target.setText(f"{c.target_lufs:.1f}")
+            ctl = self.engine.controller
+            if ctl is not None and ctl.params.target_mode == "source":
+                sole, src, lo, hi = s.source
+                if lo is not None and hi is not None and src is not None:
+                    self.k_target.setToolTip(t("meter.target.u").format(u=ctl._u, lo=lo, hi=hi))
+                    self.k_target.setText(f"{c.target_lufs:.1f}  ·  u {ctl._u:.2f}")
+                else:
+                    self.k_target.setText(f"{c.target_lufs:.1f}  ·  {t('meter.target.hold')}")
+            else:
+                self.k_target.setToolTip("")
             self.m_mom.set_marker("T", c.target_lufs, theme.ACCENT)
             key = {Phase.IDLE: "status.idle", Phase.ONSET: "status.onset", Phase.ADJUST: "status.adjust",
                    Phase.STEADY: "status.steady", Phase.SAFETY: "status.safety"}[c.phase]
@@ -305,6 +317,10 @@ class DashboardPage(QWidget):
         if self.mode_box.currentText() != self.engine.config.active_preset or \
                 self.mode_box.count() != len(self.engine.config.presets):
             self._fill_modes()
+        if s.mode_name and s.mode_name != self.engine.config.active_preset and s.source[0]:
+            self.mode_note.setText(t("dash.mode.app").format(app=self.engine.config.display_name(s.source[0]), name=s.mode_name))
+        else:
+            self.mode_note.setText("")
         self.err.setText(s.error)
 
 
@@ -358,8 +374,14 @@ class AppsPage(QWidget):
             row["active"] = sess.active
             mix = self.engine.config.apps.get(sess.name)
             if mix is not None:
-                if row["auto"].isChecked() != mix.strong:
-                    row["auto"].blockSignals(True); row["auto"].setChecked(mix.strong); row["auto"].blockSignals(False)
+                box = row["auto"]
+                names = [box.itemData(i) for i in range(1, box.count())]
+                if names != list(self.engine.config.presets) or (box.currentData() or "") != (mix.preset or ""):
+                    self._fill_preset_box(box, mix.preset)
+                pm = self.engine.platform_for(sess.name)
+                lo, hi = pm.platforms
+                row["plat"].setText(t("apps.platforms").format(lo=lo, hi=hi) if pm.ready
+                                    else t("apps.platforms.none"))
                 row["tool"].setVisible(not mix.auto and mix.auto_set_by == "tool")
                 if not row["slider"].isSliderDown():       # fader moved by the program (strong mode)
                     want = -60 if mix.offset_db <= -60 else int(round(mix.offset_db))
@@ -397,6 +419,17 @@ class AppsPage(QWidget):
         self.engine.mixer_changed()
         self._save_timer.start()
 
+    def _fill_preset_box(self, box: QComboBox, current: str) -> None:
+        cfg = self.engine.config
+        box.blockSignals(True)
+        box.clear()
+        box.addItem(t("apps.preset.follow"), "")
+        for name in cfg.presets:
+            box.addItem(name, name)
+        i = box.findData(current if current in cfg.presets else "")
+        box.setCurrentIndex(max(0, i))
+        box.blockSignals(False)
+
     def _add_row(self, key, name):
         cfg = self.engine.config
         mix = cfg.mix_for(name)
@@ -411,12 +444,18 @@ class AppsPage(QWidget):
         alias.textEdited.connect(alias_changed)
         top.addWidget(alias)
         sub = QLabel(name); sub.setObjectName("muted"); top.addWidget(sub, 1)
-        auto = QCheckBox(t("apps.strong")); auto.setChecked(mix.strong)
-        auto.setToolTip(t("apps.strong.tip"))
-        def strong_changed(on, n=name):
-            self.engine.set_strong(n, bool(on)); self._save_timer.start()
-        auto.toggled.connect(strong_changed)
+        top.addWidget(QLabel(t("apps.preset")))
+        auto = QComboBox(); auto.setToolTip(t("apps.preset.tip")); auto.setMinimumWidth(150)
+        self._fill_preset_box(auto, mix.preset)
+        def preset_changed(idx, n=name, box=auto):
+            self.engine.set_app_preset(n, box.itemData(idx) or ""); self._save_timer.start()
+        auto.currentIndexChanged.connect(preset_changed)
         top.addWidget(auto)
+        plat = QLabel(t("apps.platforms.none")); plat.setObjectName("muted"); plat.setToolTip(t("apps.platforms.tip"))
+        top.addWidget(plat)
+        relearn = QPushButton(t("apps.relearn")); relearn.setToolTip(t("apps.relearn.tip")); relearn.setFlat(True)
+        relearn.clicked.connect(lambda _c=False, n=name: (self.engine.reset_platforms(n), self._save_timer.start()))
+        top.addWidget(relearn)
         tool = QLabel(t("apps.tool")); tool.setObjectName("muted"); tool.setToolTip(t("apps.auto.tool")); tool.hide()
         top.addWidget(tool)
         work = QLabel(""); work.setObjectName("muted"); work.setToolTip(t("apps.work.tip"))
@@ -438,7 +477,7 @@ class AppsPage(QWidget):
         row.addWidget(sl, 1); row.addWidget(val); row.addWidget(reset)
         c.body.addLayout(top); c.body.addWidget(work); c.body.addWidget(bar); c.body.addLayout(row)
         self.inner_lay.insertWidget(self.inner_lay.count() - 1, c)
-        self.rows[key] = {"card": c, "bar": bar, "slider": sl, "val": val, "sub": sub, "auto": auto, "tool": tool, "work": work, "active": False}
+        self.rows[key] = {"card": c, "bar": bar, "slider": sl, "val": val, "sub": sub, "auto": auto, "tool": tool, "work": work, "plat": plat, "active": False}
 
 
 # ----------------------------------------------------------------------
@@ -491,6 +530,8 @@ class SettingsPage(QWidget):
             ("onset_guard_lufs", "set.guard", -40, 0, 1),
             ("max_master_boost_db", "set.boost", 0, 40, 1),
             ("work_silence_s", "set.worksilence", 3, 120, 1),
+            ("source_range_db", "set.source_range", 0, 20, 0.5),
+            ("source_hold_s", "set.source_hold", 5, 600, 5),
         ]:
             sp = QDoubleSpinBox(); sp.setRange(lo, hi); sp.setSingleStep(step); sp.setValue(getattr(P, key))
             form.addRow(t(label), sp)
@@ -498,6 +539,15 @@ class SettingsPage(QWidget):
         for sp in self.spins.values():
             sp.setKeyboardTracking(False)       # typed digits apply on Enter / focus-out, not per keystroke
             sp.valueChanged.connect(self._changed)
+        self.target_mode = QComboBox()
+        self.target_mode.addItem(t("set.target_mode.fixed"), "fixed")
+        self.target_mode.addItem(t("set.target_mode.source"), "source")
+        form.insertRow(form.rowCount() - 2, t("set.target_mode"), self.target_mode)
+        self.cut_pulls = QCheckBox()
+        form.addRow(t("set.cut_pulls_fader"), self.cut_pulls)
+        self._reload_spins()
+        self.target_mode.currentIndexChanged.connect(self._changed)
+        self.cut_pulls.toggled.connect(self._changed)
         self.music_dir = QLineEdit(cfg.music_dir)
         browse = QPushButton(t("set.browse"))
         browse.clicked.connect(self._browse)
@@ -547,6 +597,11 @@ class SettingsPage(QWidget):
         P = self.engine.config.params
         for k, sp in self.spins.items():
             sp.blockSignals(True); sp.setValue(getattr(P, k)); sp.blockSignals(False)
+        if hasattr(self, "target_mode"):
+            self.target_mode.blockSignals(True)
+            self.target_mode.setCurrentIndex(max(0, self.target_mode.findData(P.target_mode)))
+            self.target_mode.blockSignals(False)
+            self.cut_pulls.blockSignals(True); self.cut_pulls.setChecked(bool(P.cut_pulls_fader)); self.cut_pulls.blockSignals(False)
 
     # ---- presets ------------------------------------------------------------
     def _fill_presets(self):
@@ -611,6 +666,8 @@ class SettingsPage(QWidget):
         for k, sp in self.spins.items():
             is_int = _CP.__dataclass_fields__[k].type in ("int", int)
             setattr(cfg.params, k, int(round(sp.value())) if is_int else float(sp.value()))
+        cfg.params.target_mode = self.target_mode.currentData() or "fixed"
+        cfg.params.cut_pulls_fader = self.cut_pulls.isChecked()
         cfg.music_dir = self.music_dir.text()
         cfg.start_minimized = self.minimized.isChecked()
         cfg.volume_keys = self.volkeys.isChecked()

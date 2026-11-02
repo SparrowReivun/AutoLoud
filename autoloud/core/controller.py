@@ -75,6 +75,11 @@ class ControllerParams:
     work_silence_peak: float = 0.003     # near-silence threshold on the session peak meter (~-50 dBFS)
     tool_window_s: float = 60.0          # an app "active" this long while sounding < tool_max_duty of the time ...
     tool_max_duty: float = 0.10          # ... is a tool (key clicks, notifications): its mixer Auto is switched off
+    target_mode: str = "fixed"           # "fixed": the target is B. "source": T = (B - X) + X * u, u = where the
+                                         # sounding app's own loudness sits between its two learned platforms
+    source_range_db: float = 5.0         # X: the target may sink this far below B for the app's quiet platform
+    source_hold_s: float = 60.0          # no attributable source reading for this long -> T falls back to B
+    cut_pulls_fader: bool = False        # every protection cut the sole app trips pulls its fader down by the excess over B - 5, for good
 
 
 @dataclass
@@ -139,6 +144,10 @@ class GainController:
         self._over_blocks = 0               # steady: consecutive blocks above B + steady_trigger_db
         self._under_blocks = 0              # steady: consecutive blocks below B + steady_under_db
         self._fresh = False                 # first decision of a new work / onset: a cut goes all the way
+        self._u: float = 1.0                # source mode: position between the platforms used for the current T
+        self._u_live: float | None = None   # latest attributable position (None = not measurable right now)
+        self._u_t: float = -1e9             # when _u_live was last measurable
+        self._u_info: tuple[float, float, float] | None = None   # (src, lo, hi) behind _u_live, for the log
         self.steps_taken = 0
         self.events: deque[tuple[int, float, str, dict]] = deque(maxlen=12)   # (seq, now, kind, data)
         self._seq = 0
@@ -182,6 +191,49 @@ class GainController:
     def retune(self, targets: Targets) -> None:
         self.targets = targets
 
+    # ---- source-tracking target (target_mode == "source") ----------------
+    def set_source(self, now: float, src_lufs: float | None,
+                   lo: float | None, hi: float | None) -> None:
+        """Feed the sole sounding app's own loudness (every gain taken out)
+        and its two learned platforms. Called every session poll; None when
+        no single app is attributable or the platforms are not ready."""
+        if src_lufs is None or lo is None or hi is None or hi - lo < 1.0:
+            self._u_live = None
+            return
+        self._u_live = max(0.0, min(1.0, (src_lufs - lo) / (hi - lo)))
+        self._u_t = now
+        self._u_info = (src_lufs, lo, hi)
+
+    def _refresh_target(self, now: float) -> None:
+        """Once per listening block: take the latest position. Keep the last
+        one while nothing is attributable; after ``source_hold_s`` without a
+        reading the target is plain B again."""
+        p = self.params
+        if p.target_mode != "source":
+            self._u = 1.0
+            return
+        if self._u_live is not None:
+            u = self._u_live
+        elif now - self._u_t > p.source_hold_s:
+            u = 1.0
+        else:
+            u = self._u
+        if abs(u - self._u) > 0.02:
+            self._u = u
+            info = self._u_info or (0.0, 0.0, 0.0)
+            self._log(now, "target", t=self.t_lufs, u=u, src=info[0], lo=info[1], hi=info[2])
+        else:
+            self._u = u
+
+    @property
+    def t_lufs(self) -> float:
+        """The target the rules aim at: B, or in source mode (B - X) + X * u."""
+        p = self.params
+        if p.target_mode != "source":
+            return self.targets.b_lufs
+        x = max(0.0, p.source_range_db)
+        return (self.targets.b_lufs - x) + x * self._u
+
     @property
     def a_lufs(self) -> float:
         """The onset floor: a fixed distance below B (no separate calibration)."""
@@ -223,7 +275,7 @@ class GainController:
         new_gain = g_now + delta_db
         est = self._perceived_short_term(now)
         if self.phase in (Phase.ADJUST, Phase.STEADY) and est is not None:
-            new_gain = g_now + (T.b_lufs - est)        # one step to the needed gain
+            new_gain = g_now + (self.t_lufs - est)     # one step to the needed gain
         new_gain = self._clamp(new_gain)
         self._ramp.retarget(now, new_gain, p.move_ramp_s)
         self._pre_safety_gain = None                   # the user has set a new level
@@ -352,7 +404,7 @@ class GainController:
         elif self.phase != Phase.IDLE and silent_for > p.work_silence_s:
             self.enter_idle(now)
 
-        target_lufs = T.b_lufs
+        target_lufs = self.t_lufs
         perceived_now = (r.momentary + self._hidden_gain(g_now)) if r.has_signal else MIN_LUFS
 
         # ---- rule 4: sudden loudness, always ---------------------------------
@@ -381,7 +433,7 @@ class GainController:
 
         if self.phase == Phase.ONSET:
             f = min(1.0, (now - self._onset_t) / max(1e-3, p.listen_s))
-            target_lufs = self.a_lufs + (T.b_lufs - self.a_lufs) * f
+            target_lufs = self.a_lufs + (self.t_lufs - self.a_lufs) * f
             src = self._source_est if r.momentary > ABS_GATE_LUFS else p.onset_guard_lufs
             self._ramp.retarget(now, self._clamp(min(target_lufs - src, onset_cap_db)), 0.25)
             if f >= 1.0:
@@ -398,23 +450,25 @@ class GainController:
             self._tick_block(now)
             if self._block_done(now):
                 block = self._block_perceived(now, r)
+                self._refresh_target(now)
+                tl = self.t_lufs
                 if block is None:
                     self._over_blocks = self._under_blocks = 0
                 else:
-                    over = block > T.b_lufs + p.steady_trigger_db
-                    under = block < T.b_lufs + p.steady_under_db
+                    over = block > tl + p.steady_trigger_db
+                    under = block < tl + p.steady_under_db
                     self._over_blocks = self._over_blocks + 1 if over else 0
                     self._under_blocks = self._under_blocks + 1 if under else 0
                 if block is not None and (self._over_blocks >= p.steady_over_blocks
                                           or self._under_blocks >= p.steady_under_blocks):
                     self.phase = Phase.ADJUST
-                    self._log(now, "readjust", block=block, over=block - T.b_lufs, gain=self._ramp.end_db,
+                    self._log(now, "readjust", block=block, over=block - tl, gain=self._ramp.end_db,
                               blocks=self._over_blocks or self._under_blocks)
                     self._over_blocks = self._under_blocks = 0
                     self._decide(now, r)          # this block counts as the first listen
                 else:
                     if block is not None:
-                        self._log(now, "watch", block=block, rel=block - T.b_lufs, gain=self._ramp.end_db,
+                        self._log(now, "watch", block=block, rel=block - tl, gain=self._ramp.end_db,
                                   over_n=self._over_blocks, under_n=self._under_blocks)
                     self._arm_block(now, meter)    # keep watching, do not chase
 
@@ -450,7 +504,8 @@ class GainController:
         if block is None:                 # block was (gated) silence: listen again
             self._arm_block(now, getattr(self, "_meter", None))
             return
-        error = T.b_lufs - block          # >0 too quiet, <0 too loud
+        self._refresh_target(now)
+        error = self.t_lufs - block       # >0 too quiet, <0 too loud
         comfortable = (-p.deadband_up_db <= error) if error < 0 else (error <= p.deadband_down_db)
         if comfortable:
             self.phase = Phase.STEADY

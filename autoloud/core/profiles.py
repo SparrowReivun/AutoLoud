@@ -70,8 +70,9 @@ class AppMix:
     alias: str = ""               # user label (e.g. "Apple Music" for AMP)
     last_gain_db: float | None = None   # bus gain this app ended up with last time (rule 1)
     auto_set_by: str = ""         # "" | "tool" (auto switched off by the tool-app detector) | "user" (never touch again)
-    strong: bool = False          # "strong mode": this app must never exceed B - 5 dB (its fader is pulled down for it)
+    preset: str = ""              # parameter preset the bus runs with while this app sounds alone ("" = the dashboard mode)
     peak_src_lufs: float | None = None   # loudest this app has been at 0 dB gain (its intrinsic peak), when sounding alone
+    platforms: dict | None = None        # learned source-loudness picture (core.platforms.PlatformModel), for the source target
 
 
 @dataclass
@@ -91,6 +92,7 @@ class AppConfig:
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
     memory_version: int = 2       # bump to forget every app's remembered gain once
+    presets_version: int = 2      # bump to add new built-in presets once (2: 强力1 / strong-1)
     mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
 
@@ -124,14 +126,18 @@ class AppConfig:
             # else: older config -> keep the new defaults for params
             cfg.mixer_range_db = float(raw.get("mixer_range_db", 40.0))
             forget = int(raw.get("memory_version", 1)) < cfg.memory_version
+            strong_apps = []
             for k, v in raw.get("apps", {}).items():
                 cfg.apps[k] = AppMix(**{kk: vv for kk, vv in v.items() if kk in AppMix.__dataclass_fields__})
                 if forget:                                  # old memories were bent by protection cuts
                     cfg.apps[k].last_gain_db = None
+                if v.get("strong") and not cfg.apps[k].preset:
+                    strong_apps.append(k)
             for k, v in raw.get("profiles", {}).items():
                 cfg.profiles[k] = DeviceProfile(**{kk: vv for kk, vv in v.items()
                                                    if kk in DeviceProfile.__dataclass_fields__})
             cfg.ensure_presets()
+            cfg.migrate_presets(int(raw.get("presets_version", 1)), strong_apps)
             return cfg
         except Exception:
             cfg = cls(); cfg.ensure_presets(); return cfg
@@ -152,6 +158,7 @@ class AppConfig:
             "language": self.language,
             "config_version": self.config_version,
             "memory_version": self.memory_version,
+            "presets_version": self.presets_version,
             "params": asdict(self.params),
             "profiles": {k: asdict(v) for k, v in self.profiles.items()},
             "mixer_range_db": self.mixer_range_db,
@@ -170,6 +177,35 @@ class AppConfig:
         if self.active_preset not in self.presets:
             self.active_preset = next(iter(self.presets))
             self.params = params_from_dict(self.presets[self.active_preset])
+
+    STRONG_PRESET = "强力"          # the old per-app "strong mode" tick becomes this preset (cut_pulls_fader)
+    SOURCE_PRESET = "强力1"         # built-in: strong + the source-tracking target
+
+    def migrate_presets(self, old_version: int, strong_apps: list[str]) -> None:
+        """One-time additions: the old per-app strong tick -> a preset with
+        cut_pulls_fader, and the built-in 强力1 (source-tracking) preset."""
+        if old_version >= self.presets_version and not strong_apps:
+            return
+        self.store_active_preset()
+        if strong_apps:
+            if self.STRONG_PRESET not in self.presets:
+                base = dict(self.presets[self.active_preset])
+                base.update(safety_margin_db=min(base.get("safety_margin_db", 13.0), 12.0))
+                self.presets[self.STRONG_PRESET] = base
+            self.presets[self.STRONG_PRESET]["cut_pulls_fader"] = True
+            for k in strong_apps:
+                self.mix_for(k).preset = self.STRONG_PRESET
+        if old_version < 2 and self.SOURCE_PRESET not in self.presets:
+            base = dict(self.presets.get(self.STRONG_PRESET) or self.presets[self.active_preset])
+            base.update(target_mode="source", source_range_db=5.0, source_hold_s=60.0,
+                        deadband_up_db=1.5, deadband_down_db=1.5)
+            self.presets[self.SOURCE_PRESET] = base
+        self.params = params_from_dict(self.presets[self.active_preset])
+
+    def params_for_preset(self, name: str) -> ControllerParams:
+        """The parameters of a named preset (the active one if unknown)."""
+        self.store_active_preset()
+        return params_from_dict(self.presets.get(name) or self.presets[self.active_preset])
 
     def store_active_preset(self) -> None:
         if self.active_preset:
