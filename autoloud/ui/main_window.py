@@ -572,7 +572,7 @@ class SettingsPage(QWidget):
         self.startup_master = QDoubleSpinBox(); self.startup_master.setRange(0, 100); self.startup_master.setSingleStep(5)
         self.startup_master.setDecimals(0); self.startup_master.setValue(cfg.startup_master_percent)
         form.addRow(t("set.startup_master"), self.startup_master)
-        self.exit_master = QDoubleSpinBox(); self.exit_master.setRange(-1, 100); self.exit_master.setSingleStep(1)
+        self.exit_master = QDoubleSpinBox(); self.exit_master.setRange(0, 100); self.exit_master.setSingleStep(1)
         self.exit_master.setDecimals(0); self.exit_master.setValue(cfg.exit_master_percent)
         form.addRow(t("set.exit_master"), self.exit_master)
         self.volkeys = QCheckBox(); self.volkeys.setChecked(cfg.volume_keys)

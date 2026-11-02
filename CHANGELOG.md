@@ -2,6 +2,7 @@
 
 ## 0.4.1 — 2026-11-02
 
+- On exit / crash the Windows master volume is set to 1 % (Settings), and it is set before the sessions return to 100 % - that order was the exit pop. (Restoring the pre-launch master level was dropped: unreliable across crashes.)
 - The master level found at start-up is remembered on disk, so it is put back on exit even after a crash left the master parked (before, a second launch saw 80 % and "restored" 80 %). Unhandled Python exceptions and interpreter exit now also put the volumes back. Settings: "master volume to leave on exit / crash (%)" (−1 = the start-up value; e.g. 1 for a near-mute).
 - No pop on start or exit: the master is raised to its parked level only after the sessions already carry the parked attenuation, and on exit the master is lowered back before the sessions return to 100 % (whichever move makes things quieter goes first).
 - Volume keys in a full-screen game: the keyboard hook cannot see key presses while an elevated window (most games with anti-cheat) is in front, so Windows moved the master itself. Such a master move is now read as the presses it was (2 % per press), P is nudged by the key step per press, and the master is parked again. For that the master is parked at 80 % rather than 100 % (a press must still have somewhere to go); configs at the old defaults are moved once. The key step default is 0.5 dB (was 1 dB; a config still at 1 dB is moved once; Settings).

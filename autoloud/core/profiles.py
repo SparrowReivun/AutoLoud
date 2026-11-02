@@ -91,13 +91,13 @@ class AppConfig:
     active_preset: str = ""
     volume_keys: bool = True      # volume keys / knob adjust B instead of the Windows master volume
     sync_default_device: bool = True   # picking a device on the dashboard also makes it the Windows default output
-    exit_master_percent: float = -1.0  # master volume to leave on exit / crash: -1 = what it was before start-up
+    exit_master_percent: float = 1.0   # master volume to leave on exit / crash (-1 = what it was before start-up; unreliable, off by default)
     master_before_percent: float = -1.0   # the master level found at start-up (persisted so a crash does not lose it)
     volume_key_step_db: float = 0.5
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
     memory_version: int = 2       # bump to forget every app's remembered gain once
-    presets_version: int = 6      # bump to add new built-in presets once (2: 强力1; 3: steady triggers; 4/5/6: startup master -> 80 %, key step 0.5)
+    presets_version: int = 7      # bump to add new built-in presets once (2: 强力1; 3: steady triggers; 4/5/6: startup master -> 80 %, key step 0.5; 7: exit master 1 %)
     mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
 
@@ -120,7 +120,9 @@ class AppConfig:
             cfg.start_minimized = raw.get("start_minimized", False)
             cfg.volume_keys = bool(raw.get("volume_keys", True))
             cfg.sync_default_device = bool(raw.get("sync_default_device", True))
-            cfg.exit_master_percent = float(raw.get("exit_master_percent", -1.0))
+            cfg.exit_master_percent = float(raw.get("exit_master_percent", 1.0))
+            if int(raw.get("presets_version", 1)) < 7 and cfg.exit_master_percent < 0:
+                cfg.exit_master_percent = 1.0               # exit level: 1 % by default (restore-before dropped)
             cfg.master_before_percent = float(raw.get("master_before_percent", -1.0))
             cfg.sidebar_collapsed = bool(raw.get("sidebar_collapsed", False))
             cfg.startup_master_percent = float(raw.get("startup_master_percent", 80.0))

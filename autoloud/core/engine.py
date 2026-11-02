@@ -878,10 +878,14 @@ class Engine:
         try:
             before = getattr(self, "_master_before", None)
             parked = getattr(self, "_master_parked", None)
-            master_first = leaving and before is not None and (parked is None or before <= parked)
+            want = None
+            if leaving:
+                want = self.config.exit_master_percent / 100.0 if self.config.exit_master_percent >= 0 else before
+            # the master goes first whenever it is coming down (or staying): sessions back
+            # to 100 % under a parked-high master is the exit pop
+            master_first = leaving and (want is None or parked is None or want <= parked + 1e-6)
             def put_master():
                 if leaving:
-                    want = self.config.exit_master_percent / 100.0 if self.config.exit_master_percent >= 0 else before
                     if want is None:
                         return
                     self.backend.set_master_scalar(self.device, max(0.0, min(1.0, want)))
