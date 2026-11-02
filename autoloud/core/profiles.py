@@ -85,7 +85,7 @@ class AppConfig:
     music_dir: str = ""           # folder with <genre>/*.wav|mp3|flac for calibration
     start_minimized: bool = False
     sidebar_collapsed: bool = False
-    startup_master_percent: float = 50.0   # set the Windows master volume to this on start (0 = leave it)
+    startup_master_percent: float = 100.0  # set the Windows master volume to this on start (0 = leave it); restored on exit
     presets: dict[str, dict] = field(default_factory=dict)   # name -> ControllerParams as a dict
     active_preset: str = ""
     volume_keys: bool = True      # volume keys / knob adjust B instead of the Windows master volume
@@ -94,7 +94,7 @@ class AppConfig:
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
     memory_version: int = 2       # bump to forget every app's remembered gain once
-    presets_version: int = 4      # bump to add new built-in presets once (2: 强力1; 3: its steady triggers; 4: startup master 50 %)
+    presets_version: int = 5      # bump to add new built-in presets once (2: 强力1; 3: its steady triggers; 4/5: startup master 50 % -> 100 %)
     mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
 
@@ -118,9 +118,10 @@ class AppConfig:
             cfg.volume_keys = bool(raw.get("volume_keys", True))
             cfg.sync_default_device = bool(raw.get("sync_default_device", True))
             cfg.sidebar_collapsed = bool(raw.get("sidebar_collapsed", False))
-            cfg.startup_master_percent = float(raw.get("startup_master_percent", 50.0))
-            if int(raw.get("presets_version", 1)) < 4 and cfg.startup_master_percent == 40.0:
-                cfg.startup_master_percent = 50.0           # the old default moved to 50 % once
+            cfg.startup_master_percent = float(raw.get("startup_master_percent", 100.0))
+            pv = int(raw.get("presets_version", 1))
+            if (pv < 4 and cfg.startup_master_percent == 40.0) or (pv < 5 and cfg.startup_master_percent == 50.0):
+                cfg.startup_master_percent = 100.0          # the old defaults (40 %, 50 %) moved to 100 % once
             cfg.presets = {str(k): dict(v) for k, v in raw.get("presets", {}).items() if isinstance(v, dict)}
             cfg.active_preset = str(raw.get("active_preset", ""))
             cfg.volume_key_step_db = float(raw.get("volume_key_step_db", 1.0))

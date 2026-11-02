@@ -59,8 +59,8 @@ _T = {
     "ev.failed": ("未生效，Windows 拒绝了", "not applied, Windows refused"),
     "set.sync_default": ("首页切换输出设备时，同时把它设为 Windows 的默认输出设备", "Picking an output device on the dashboard also makes it the Windows default output"),
     "ev.default_device": ("Windows 默认输出设备 → {name}（{ok}）", "Windows default output → {name} ({ok})"),
-    "dash.volkeys.note": ("⚠ 音量键 / 旋钮现在调的是舒适响度 P，不再改 Windows 主音量（这是有意的：主音量由程序接管，开机时设为 {pct:.0f} %）。想恢复按键调系统音量，在设置页关掉「用音量键调节 P」。",
-                          "⚠ Volume keys / knob now move the comfort level P, not the Windows master volume (by design: the master is managed by AutoLoud and set to {pct:.0f} % at start). To give the keys back to Windows, untick \u201cVolume keys adjust P\u201d on the Settings page."),
+    "dash.volkeys.note": ("音量键 / 旋钮现在调的是舒适响度 P，不再改 Windows 主音量（主音量由程序管理；设置页可关）。",
+                          "Volume keys / knob now move the comfort level P, not the Windows master volume (the master is managed by AutoLoud; can be switched off on the Settings page)."),
     "dash.b.hint": ("像音量旋钮一样拖：声音立刻跟着变，停下的位置就是新的目标 P。拖到来源本身达不到的位置时，提升会停在主音量余量的上限（不会削波）。",
                     "Drag it like a volume knob: the sound follows at once and where you stop becomes the new target P. Beyond what the source can reach, the boost stops at the master-volume headroom (no clipping)."),
     "act.off": ("自动响度未在工作", "Auto loudness is not running"),
@@ -115,11 +115,11 @@ _T = {
     "cal.intro.h": ("准备", "Before you start"),
     "cal.intro": (
         "1. 戴好耳机 / 打开音箱，选择要校准的输出设备。\n"
-        "2. 把外部设备（耳机放大器、音箱、蓝牙耳机）和 Windows 主音量都调到 80% 左右，校准后不要再动它们。\n"
+        "2. 把外部设备（耳机放大器、音箱、蓝牙耳机）调到你平时偏响一点的位置，校准后不要再动它。Windows 主音量由 AutoLoud 管理（启动时设为 100%），不用动。\n"
         "3. 暂停其它正在播放声音的程序，否则会影响测量。\n\n"
         "接下来播放一首你喜欢的音乐，把推子从 0 慢慢拉高到你觉得舒适的听音音量——这就是全部的校准。",
         "1. Put on your headphones / turn on your speakers and pick the device to calibrate.\n"
-        "2. Set your external device (headphone amp, speakers, Bluetooth headset) and the Windows master volume to about 80 % and leave them there afterwards.\n"
+        "2. Set your external device (headphone amp, speakers, Bluetooth headset) a little louder than you usually have it and leave it there afterwards. The Windows master volume is managed by AutoLoud (set to 100 % at start); leave it alone.\n"
         "3. Pause anything else that is playing.\n\n"
         "Next, play a piece of music you like and slowly raise the fader from 0 to the level you find comfortable — that is the whole calibration."),
     "cal.music.h": ("舒适响度 P", "Comfort level P"),

@@ -175,7 +175,7 @@ class Engine:
         except Exception:
             pass
         if restore:
-            self._restore_volumes()
+            self._restore_volumes(leaving=True)
         else:
             self._applied_session_db.clear()
             self._applied_master_db = None
@@ -463,10 +463,15 @@ class Engine:
         session query: park the Windows master at the configured position so
         there is boost headroom, and make it the calibration reference."""
         pct = self.config.startup_master_percent
-        if pct <= 0 or getattr(self, "_startup_master_done", False) or self.profile is None:
+        done = getattr(self, "_startup_master_done", set())
+        if pct <= 0 or self.profile is None or self.device is None or self.device.id in done:
             return
-        self._startup_master_done = True
+        done.add(self.device.id); self._startup_master_done = done     # once per device per launch
         try:
+            try:                                   # remembered so exit can put it back
+                self._master_before = float(self.backend.get_master_scalar(self.device))
+            except Exception:
+                self._master_before = None
             self.backend.set_master_scalar(self.device, max(0.0, min(1.0, pct / 100.0)))
             self.profile.master_ref_db = self.backend.get_master_db(self.device)
             self._applied_master_db = None
@@ -817,14 +822,22 @@ class Engine:
             except Exception:
                 log.exception("set master")
 
-    def _restore_volumes(self) -> None:
+    def _restore_volumes(self, leaving: bool = False) -> None:
+        """Sessions back to 100 %. The master goes back to the calibration
+        reference - or, when the program is leaving, to where it was before
+        start-up: with the master managed at 100 % a full-volume restore would
+        otherwise blast the headphones."""
         if self.device is None:
             return
         try:
             for s in self.backend.list_sessions(self.device):
                 if not s.is_self:
                     self.backend.set_session_volume(self.device, s.key, 1.0)
-            if self.profile is not None and self.profile.calibrated:
+            before = getattr(self, "_master_before", None)
+            if leaving and before is not None:
+                self.backend.set_master_scalar(self.device, before)
+                log.info("exit: master volume restored to %.0f%%", before * 100)
+            elif self.profile is not None and self.profile.calibrated:
                 self.backend.set_master_db(self.device, self.profile.master_ref_db)
         except Exception:
             log.exception("restore volumes")
