@@ -2,6 +2,7 @@
 
 ## 0.4.1 — 2026-11-02
 
+- Bus ran to its floor (−120 dB) or ceiling after a device switch: the per-session volume objects were cached by process only, so after Windows re-created the sessions (default-device change, Bluetooth re-pair) AutoLoud kept setting - and reading back - the volume of a dead session while the live stream played on untouched; the loudness never answered and the controller cut to the floor. The cache is now keyed by session instance (and device), every session a process holds gets the volume (Chrome has several), and a session whose reported volume drifts from what was set is set again.
 - Picking an output device on the dashboard now also makes it the Windows default output (IPolicyConfig, the same call the Sound control panel makes; all three roles), and the activity log says whether Windows applied it. Settings switch "also make it the Windows default output" (on by default).
 - Startup master volume default is 50 % (was 40 %; a config still at the old default is moved once). The dashboard now says, under the P slider, that the volume keys / knob move P and no longer the Windows master volume, and where to switch that off.
 - 强力1 preset shipped with a fresh config follows the author's current tuning (steady trigger 5, protection T + 18, 0.4 s moves, 30 s silence).

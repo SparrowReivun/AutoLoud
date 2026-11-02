@@ -789,7 +789,11 @@ class Engine:
         for s in apps:
             db = min(0.0, desired[s.key] - P)
             prev = self._applied_session_db.get(s.key)
-            if prev is None or abs(prev - db) > 0.05:
+            want = 0.0 if db <= -119.9 else 10 ** (db / 20)
+            # Windows re-creates a session (default-device switch, a new stream) at its own
+            # stored volume: if what the session reports drifts from what we set, set it again
+            drifted = prev is not None and abs(s.volume - want) > 0.02
+            if prev is None or abs(prev - db) > 0.05 or drifted:
                 try:
                     # at the floor the session is muted outright (0 %), i.e. -inf dB
                     self.backend.set_session_volume(self.device, s.key, 0.0 if db <= -119.9 else 10 ** (db / 20))

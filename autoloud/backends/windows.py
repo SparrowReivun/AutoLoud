@@ -186,7 +186,7 @@ class WindowsBackend:
         self._stream = None
         self._cb = None
         # --- everything below is touched ONLY on the COM worker thread ---
-        self._session_cache: dict[str, object] = {}
+        self._session_cache: dict[str, dict] = {}      # key -> {session instance: ISimpleAudioVolume}
         self._endpoint_cache: dict[str, object] = {}   # device id -> IAudioEndpointVolume
         self._mgr_cache: dict[str, object] = {}        # device id -> IAudioSessionManager2
         self._com = _ComWorker(on_restart=self._drop_caches)
@@ -415,7 +415,15 @@ class WindowsBackend:
             mgr = self._session_manager(device)
             enumerator = mgr.GetSessionEnumerator()
             count = enumerator.GetCount()
-            new_cache: dict[str, object] = {}
+            # cache: key -> {session instance id: ISimpleAudioVolume}. The instance id
+            # matters: after a default-device switch Windows re-creates the sessions,
+            # and a volume object of the old instance still answers (reads back what
+            # we set) while controlling nothing - the bus then runs to its floor or
+            # ceiling chasing a level that never moves. One process can also hold
+            # several sessions (Chrome does): every one of them gets the volume.
+            old_cache: dict[str, dict] = self._session_cache
+            new_cache: dict[str, dict] = {}
+            by_key: dict[str, AudioSession] = {}
             for i in range(count):
                 ctl = enumerator.GetSession(i)
                 if not ctl:
@@ -427,19 +435,33 @@ class WindowsBackend:
                     continue
                 name = self._process_name(pid, ctl2)
                 key = f"{pid}:{name}"
-                vol = self._session_cache.get(key) or ctl.QueryInterface(ISimpleAudioVolume)
+                try:
+                    inst = str(ctl2.GetSessionInstanceIdentifier())
+                except Exception:
+                    inst = f"#{i}"
+                inst = f"{device.id}|{inst}"
+                vol = old_cache.get(key, {}).get(inst) or ctl.QueryInterface(ISimpleAudioVolume)
                 try:
                     meter = ctl.QueryInterface(IAudioMeterInformation)
                     peak = float(meter.GetPeakValue())
                 except Exception:
                     peak = 0.0
-                new_cache[key] = vol
-                result.append(AudioSession(
-                    key=key, name=name, pid=pid,
-                    volume=float(vol.GetMasterVolume()), peak=peak,
-                    active=(state == AudioSessionState.Active),
-                    is_self=(pid == me),
-                ))
+                new_cache.setdefault(key, {})[inst] = vol
+                active = (state == AudioSessionState.Active)
+                prev = by_key.get(key)
+                if prev is None:
+                    by_key[key] = AudioSession(
+                        key=key, name=name, pid=pid,
+                        volume=float(vol.GetMasterVolume()), peak=peak,
+                        active=active, is_self=(pid == me),
+                    )
+                else:                      # same process, another session: one row, loudest meter
+                    by_key[key] = AudioSession(
+                        key=key, name=name, pid=pid,
+                        volume=prev.volume, peak=max(prev.peak, peak),
+                        active=prev.active or active, is_self=prev.is_self,
+                    )
+            result = list(by_key.values())
             self._session_cache = new_cache
         except Exception as e:  # pragma: no cover
             log.exception("list_sessions failed: %s", e)
@@ -461,16 +483,16 @@ class WindowsBackend:
 
     def set_session_volume(self, device: OutputDevice, key: str, scalar: float) -> None:
         def f():
-            vol = self._session_cache.get(key)
-            if vol is None:
+            vols = self._session_cache.get(key)
+            if not vols:
                 self._list_sessions(device)
-                vol = self._session_cache.get(key)
-            if vol is not None:
+                vols = self._session_cache.get(key)
+            for inst, vol in list((vols or {}).items()):
                 try:
                     vol.SetMasterVolume(float(max(0.0, min(1.0, scalar))), None)
                 except Exception:
                     log.exception("set_session_volume(%s) failed", key)
-                    self._session_cache.pop(key, None)
+                    self._session_cache.get(key, {}).pop(inst, None)
         self._com.call(f)
 
     # ------------------------------------------------------------------
