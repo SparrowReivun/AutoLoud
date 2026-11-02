@@ -15,22 +15,23 @@ AutoLoud levels every sound on Windows to the comfortable loudness you calibrate
 
 ## What it does
 
-- **Onset guard**: when sound appears after silence, playback starts 5 dB under your comfort level B and ramps up to B over one block length (5 s by default), only ever cutting, never boosting a quiet intro. A sudden loud notification never blasts you.
-- **Listen, then nudge**: after that, every 5 s of listening leads to one decision: too quiet → up by at most 1 dB; too loud → down by at most 0.8 dB, except a new work's first cut, which goes all the way; within 2 dB of B a step goes exactly to B; each ramped over one block length; up to 3 dB above or 8 dB below B counts as comfortable and it stops.
-- **Comfortable means hands off**: quiet dialogue, interludes and fade-outs are left alone; only 2 consecutive blocks above B + 6 dB, or 3 consecutive blocks below B − 20 dB, restart the adjustment.
+- **Onset guard**: when sound appears after silence, playback starts 5 dB under your comfort level P and ramps up to T over one block length (5 s by default), only ever cutting, never boosting a quiet intro. A sudden loud notification never blasts you.
+- **Two reference levels**: P (human preference loudness, what you calibrated / set with the slider) and T (target loudness, what the rules actually aim at). In the normal modes T = P; in the 强力1 mode T is learned and slides within [P − X, P] with the app's own loudness. Every "T ± n" below is "P ± n" in the normal modes.
+- **Listen, then nudge**: after that, every 5 s of listening leads to one decision: too quiet → up by at most 1 dB; too loud → down by at most 0.8 dB, except a new work's first cut, which goes all the way; within 2 dB of P a step goes exactly to P; each ramped over one block length; up to 3 dB above or 8 dB below T counts as comfortable and it stops.
+- **Comfortable means hands off**: quiet dialogue, interludes and fade-outs are left alone; only 2 consecutive blocks above T + 6 dB, or 3 consecutive blocks below T − 20 dB, restart the adjustment.
 - **New work, same gain**: a track or video change (system media info, or sound after 15 s of silence) resumes at the gain that app had last time, then nudges from there; only apps never heard before go through the onset guard.
-- **Sudden loudness**: momentary loudness above B + 13 dB (adjustable on the dashboard) is eased down to B + 5 dB within 0.3 s (adjustable); once landed, the normal rules resume by themselves. No pop-up.
+- **Sudden loudness**: momentary loudness above T + 13 dB (adjustable on the dashboard) is eased down to T + 5 dB within 0.3 s (adjustable); once landed, the normal rules resume by themselves. No pop-up.
 - **Tool apps excluded automatically**: a session that stays active but hardly ever sounds (IME key clicks, notification helpers) is tagged "tool app" and takes no part in the levelling or the detection.
-- **Modes and strong mode**: the dashboard picks a parameter preset as the current "mode" (e.g. default / strong; presets are made on the Settings page); in the mixer each app can be put in "strong mode" on its own — every protection cut it trips pulls its fader down by the excess over B − 5 dB, for good.
+- **Modes and strong mode**: the dashboard picks a parameter preset as the current "mode" (e.g. default / strong; presets are made on the Settings page); in the mixer each app can be put in "strong mode" on its own — every protection cut it trips pulls its fader down by the excess over T − 5 dB, for good.
 - **Per-app mixer**: every app that produces sound gets a fader (mute to +15 dB) on top of the bus; a fader above 0 dB is realised by raising the master and pulling the other apps down.
-- **Volume keys move B**: keyboard volume keys and external volume knobs adjust the comfort level B (1 dB per press) instead of the Windows master volume; can be turned off in Settings.
+- **Volume keys move P**: keyboard volume keys and external volume knobs adjust the comfort level P (1 dB per press) instead of the Windows master volume; can be turned off in Settings.
 - **Restores everything**: on exit all app volumes and the master volume return to where they were.
 
 ## Calibration
 
-One step: set your external device (headphone amp / speakers / Bluetooth headset) and the Windows master volume to about 80 %, then play music you like — a bundled track, or your own in any app (Spotify, a browser…) selected in the wizard — and slowly raise the fader from 0 to the level you find comfortable. That is your comfort level B.
+One step: set your external device (headphone amp / speakers / Bluetooth headset) and the Windows master volume to about 80 %, then play music you like — a bundled track, or your own in any app (Spotify, a browser…) selected in the wizard — and slowly raise the fader from 0 to the level you find comfortable. That is your comfort level P.
 
-Each output device keeps its own calibration. Leave the external device and the master volume alone afterwards — AutoLoud uses them as the reference; B itself can be fine-tuned any time with the dashboard slider.
+Each output device keeps its own calibration. Leave the external device and the master volume alone afterwards — AutoLoud uses them as the reference; P itself can be fine-tuned any time with the dashboard slider.
 
 ## Run from source / build
 

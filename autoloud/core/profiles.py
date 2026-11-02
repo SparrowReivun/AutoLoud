@@ -92,7 +92,7 @@ class AppConfig:
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
     memory_version: int = 2       # bump to forget every app's remembered gain once
-    presets_version: int = 2      # bump to add new built-in presets once (2: 强力1 / strong-1)
+    presets_version: int = 3      # bump to add new built-in presets once (2: 强力1 / strong-1; 3: its steady triggers)
     mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
 
@@ -198,8 +198,17 @@ class AppConfig:
         if old_version < 2 and self.SOURCE_PRESET not in self.presets:
             base = dict(self.presets.get(self.STRONG_PRESET) or self.presets[self.active_preset])
             base.update(target_mode="source", source_range_db=5.0, source_hold_s=60.0,
-                        deadband_up_db=1.5, deadband_down_db=1.5)
+                        deadband_up_db=1.5, deadband_down_db=1.5,
+                        steady_trigger_db=3.0, steady_under_db=-3.0)
             self.presets[self.SOURCE_PRESET] = base
+        elif old_version < 3 and self.SOURCE_PRESET in self.presets:
+            # a sliding target must be followed out of steady too: the copied ±4/−15 steady
+            # triggers swallowed the whole X range (patched only if still at the copied values)
+            sp = self.presets[self.SOURCE_PRESET]
+            src = self.presets.get(self.STRONG_PRESET) or {}
+            if sp.get("steady_trigger_db") == src.get("steady_trigger_db") and \
+                    sp.get("steady_under_db") == src.get("steady_under_db"):
+                sp["steady_trigger_db"] = 3.0; sp["steady_under_db"] = -3.0
         self.params = params_from_dict(self.presets[self.active_preset])
 
     def params_for_preset(self, name: str) -> ControllerParams:

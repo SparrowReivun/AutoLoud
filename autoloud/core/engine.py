@@ -531,7 +531,8 @@ class Engine:
         mix = self.config.mix_for(s.name)
         if not self.params_for_app(s.name).cut_pulls_fader:
             return
-        excess = cmd.perceived_lufs - (self.profile.b_lufs - self.STRONG_HEADROOM_DB)
+        t_now = self.controller.t_lufs if self.controller is not None else self.profile.b_lufs
+        excess = cmd.perceived_lufs - (t_now - self.STRONG_HEADROOM_DB)
         if excess <= 0.5:
             return
         mix.offset_db = max(-40.0, round(mix.offset_db - excess, 1))

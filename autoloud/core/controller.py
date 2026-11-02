@@ -236,8 +236,8 @@ class GainController:
 
     @property
     def a_lufs(self) -> float:
-        """The onset floor: a fixed distance below B (no separate calibration)."""
-        return self.targets.b_lufs - self.params.onset_below_b_db
+        """The onset floor: a fixed distance below the target T (= P unless source mode)."""
+        return self.t_lufs - self.params.onset_below_b_db
 
     def notify_new_work(self, now: float, meter=None, remembered_gain_db: float | None = None) -> None:
         """A new song / video started in an app that follows the bus gain:
@@ -400,7 +400,7 @@ class GainController:
             else:
                 self.phase = Phase.ONSET
                 self._onset_t = now
-                self._log(now, "onset", a=self.a_lufs, b=T.b_lufs)
+                self._log(now, "onset", a=self.a_lufs, b=self.t_lufs)
         elif self.phase != Phase.IDLE and silent_for > p.work_silence_s:
             self.enter_idle(now)
 
@@ -412,14 +412,14 @@ class GainController:
             # trigger at B + margin; once cutting, keep correcting until the
             # level really sits at B + land (the momentary meter lags the jump)
             over = p.safety_margin_db if self.phase != Phase.SAFETY else p.safety_land_db + 1.0
-            excess = perceived_now - (T.b_lufs + over)
+            excess = perceived_now - (self.t_lufs + over)
             settled = self.phase != Phase.SAFETY or (
                 self._ramp.done(now) and now - (self._safety_t or 0.0) > p.safety_ramp_s + 0.5)
             settled = settled and now >= self._safety_guard_until   # a B shift is still landing
             if excess > 0 and settled:   # momentary lags ~0.4 s: let the cut show before cutting again
                 # cut from the gain that is *sounding now* (not a ramp's end point)
                 # down to B + safety_land_db, fast
-                cut = perceived_now - (T.b_lufs + p.safety_land_db)
+                cut = perceived_now - (self.t_lufs + p.safety_land_db)
                 self._ramp.retarget(now, self._clamp(g_now - cut), p.safety_ramp_s)
                 if self.phase != Phase.SAFETY:
                     safety_now = True

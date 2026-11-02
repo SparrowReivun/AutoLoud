@@ -162,7 +162,7 @@ class DashboardPage(QWidget):
         elif "listen" in a:
             l = a["listen"]
             key = "act.listen_steady" if a["phase"] == "steady" else "act.listen"
-            b = s.profile.b_lufs if s.profile is not None else 0.0
+            b = s.command.target_lufs if s.command is not None else (s.profile.b_lufs if s.profile is not None else 0.0)
             blk = s.reading.integrated + self._hidden_db(s)
             now_txt = t(key).format(el=l["elapsed"], tot=l["total"], g=a["gain"], lufs=blk, rel=blk - b)
             frac = l["elapsed"] / max(1e-3, l["total"])
@@ -229,8 +229,8 @@ class DashboardPage(QWidget):
 
     def _update_thr_label(self):
         m = self.engine.config.params.safety_margin_db
-        p = self.engine.profile
-        self.thr_val.setText(f"B {m:+.1f} dB" + (f" = {p.b_lufs + m:.1f}" if p else ""))
+        ctl = self.engine.controller
+        self.thr_val.setText(f"T {m:+.1f} dB" + (f" = {ctl.t_lufs + m:.1f}" if ctl is not None else ""))
 
     def refresh_devices(self):
         try:
@@ -281,7 +281,7 @@ class DashboardPage(QWidget):
         self._update_thr_label()
         if p is not None and p.calibrated:
             for m in (self.m_mom, self.m_st, self.m_int):
-                m.set_marker("B", p.b_lufs, theme.ACCENT2)
+                m.set_marker("P", p.b_lufs, theme.ACCENT2)
             self.prof_lbl.setText(f"{t('b')} = {p.b_lufs:.1f} LUFS · "
                                   f"master ref = {p.master_ref_db:+.1f} dB · {t('genre')}: {p.genre or '—'}")
             self.uncal.hide()
@@ -315,6 +315,8 @@ class DashboardPage(QWidget):
             key = "status.calibrating" if s.calibrating else "status.disabled"
             for k in (self.k_total, self.k_session, self.k_master, self.k_target):
                 k.setText("—")
+            for m in (self.m_mom, self.m_st, self.m_int):
+                m.set_marker("T", None)
         self.status.setText(t(key))
         self._update_activity(s)
         if self.mode_box.currentText() != self.engine.config.active_preset or \

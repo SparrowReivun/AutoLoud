@@ -44,8 +44,9 @@ class LoudnessBar(QWidget):
         p.drawText(0, 0, w, 16, Qt.AlignLeft | Qt.AlignVCenter, self.label)
         if self.value <= self.LO:
             txt = "—"
-        elif "B" in self.markers:                     # dashboard: show the distance to B
-            txt = f"B {self.value - self.markers['B'][0]:+.1f} dB"
+        elif "T" in self.markers or "P" in self.markers:   # dashboard: distance to the target (T = P unless source mode)
+            ref = "T" if "T" in self.markers else "P"
+            txt = f"{ref} {self.value - self.markers[ref][0]:+.1f} dB"
         else:
             txt = f"{self.value:.1f} LUFS"
         p.drawText(0, 0, w, 16, Qt.AlignRight | Qt.AlignVCenter, txt)
