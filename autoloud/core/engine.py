@@ -159,6 +159,7 @@ class Engine:
         self.controller = GainController(self.profile.targets(), self.config.params)
         self._applied_session_db.clear()
         self._applied_master_db = None
+        self._sessions_parked = False
         self._running = True
         self._thread = threading.Thread(target=self._control_loop, daemon=True, name="autoloud-control")
         self._thread.start()
@@ -466,6 +467,8 @@ class Engine:
         done = getattr(self, "_startup_master_done", set())
         if pct <= 0 or self.profile is None or self.device is None or self.device.id in done:
             return
+        if not getattr(self, "_sessions_parked", False):
+            return          # sessions first (attenuated to the parked gain), master second: no blast
         done.add(self.device.id); self._startup_master_done = done     # once per device per launch
         try:
             try:                                   # remembered so exit can put it back
@@ -838,6 +841,7 @@ class Engine:
                     self._applied_session_db[s.key] = db
                 except TimeoutError:
                     log.warning("set volume for %s timed out; skipping it this tick", s.name)
+        self._sessions_parked = True
         target_master = self.profile.master_ref_db + P
         if self._applied_master_db is None or abs(self._applied_master_db - target_master) > 0.05:
             try:
@@ -854,15 +858,23 @@ class Engine:
         if self.device is None:
             return
         try:
+            before = getattr(self, "_master_before", None)
+            parked = getattr(self, "_master_parked", None)
+            master_first = leaving and before is not None and (parked is None or before <= parked)
+            def put_master():
+                if leaving and before is not None:
+                    self.backend.set_master_scalar(self.device, before)
+                    log.info("exit: master volume restored to %.0f%%", before * 100)
+                elif self.profile is not None and self.profile.calibrated:
+                    self.backend.set_master_db(self.device, self.profile.master_ref_db)
+            # order matters for the ears: whichever move makes things quieter goes first
+            if master_first:
+                put_master()
             for s in self.backend.list_sessions(self.device):
                 if not s.is_self:
                     self.backend.set_session_volume(self.device, s.key, 1.0)
-            before = getattr(self, "_master_before", None)
-            if leaving and before is not None:
-                self.backend.set_master_scalar(self.device, before)
-                log.info("exit: master volume restored to %.0f%%", before * 100)
-            elif self.profile is not None and self.profile.calibrated:
-                self.backend.set_master_db(self.device, self.profile.master_ref_db)
+            if not master_first:
+                put_master()
         except Exception:
             log.exception("restore volumes")
         self._applied_session_db.clear()
