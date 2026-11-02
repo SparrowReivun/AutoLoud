@@ -1,55 +1,167 @@
+<div align="center">
+
 # AutoLoud
 
-**Calibrate once; never touch the volume again when switching videos or apps.**
+**You adjust once. We handle the rest.**
 
-AutoLoud levels every sound on Windows to the comfortable loudness you calibrated. No driver, no audio-stream interception: it measures how loud the system output is in real time (ITU-R BS.1770 LUFS) and quietly adjusts each application's volume so the result lands on your target.
+[简体中文](README.md) · [**English**](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Русский](README.ru.md)
+
+</div>
+
+AutoLoud is an automatic loudness control project. It learns your listening preference from the volume adjustments you make, combines it with each application's loudness history, and adjusts the volume for you while content plays — fewer manual corrections, while keeping as much of the content's own dynamics as possible.
 
 ![AutoLoud dashboard](assets/screenshot-dashboard.png)
 
-## Install
+## Why AutoLoud?
 
-1. Download the latest `AutoLoud.exe` from [Releases](../../releases) (single file, ~100 MB, no Python needed).
-2. Run it. On first launch SmartScreen may warn — choose "More info → Run anyway". The exe is not code-signed.
-3. The UI follows your Windows display language (Chinese → 中文, otherwise English); change it any time in Settings.
-4. The calibration wizard opens automatically; it takes about two minutes. AutoLoud then lives in the tray.
+Have you ever counted how many times a day adjusting the volume interrupts what you were doing?
 
-## What it does
+A new video opens and is suddenly loud; the next song is too quiet to hear. The dialogue in a game is finally at the right level — and the next fight is deafening.
 
-- **Onset guard**: when sound appears after silence, playback starts 10 dB under the target T and ramps up to T over one block length (2 s by default), only ever cutting, never boosting a quiet intro. A sudden loud notification never blasts you.
-- **Two reference levels**: P (human preference loudness, what you calibrated / set with the slider) and T (target loudness, what the rules actually aim at). In the normal modes T = P; in the 强力1 mode T is learned and slides within [P − X, P] with the app's own loudness. Every "T ± n" below is "P ± n" in the normal modes.
-- **Listen, then nudge**: after that, every 2 s of listening leads to one decision: too quiet → up by at most 1.3 dB; too loud → down by at most 2 dB, except a new work's first cut, which goes all the way; within 3 dB of T a step goes exactly to T; each ramped over one block length; up to 2 dB above or 3 dB below T counts as comfortable and it stops.
-- **Comfortable means hands off**: quiet dialogue, interludes and fade-outs are left alone; only a block above T + 4.5 dB, or 3 consecutive blocks below T − 16 dB, restart the adjustment (强力1 preset: 2 blocks above T + 5, or 4 below T − 6).
-- **New work, same gain**: a track or video change (system media info, or sound after 15 s of silence) resumes at the gain that app had last time, then nudges from there; only apps never heard before go through the onset guard.
-- **Sudden loudness**: momentary loudness above T + 14 dB (adjustable on the dashboard) is cut down to T + 2 dB within 0.05 s (adjustable); once landed, the normal rules resume by themselves. No pop-up.
-- **Tool apps excluded automatically**: a session that stays active but hardly ever sounds (IME key clicks, notification helpers) is tagged "tool app" and takes no part in the levelling or the detection.
-- **Modes and per-app presets**: the dashboard picks a parameter preset as the current "mode" (three ship: 默认 / 强力 / 强力1; more on the Settings page); in the mixer each app can choose the preset the bus runs with while that app sounds alone. Two "strong" switches live in a preset: "cut pulls fader" (every protection cut pulls the app's fader down by the excess over T − 5 dB, for good) and "target = follow source loudness" (强力1: the target T slides between P − X and P with the app's own loudness, learned from its quiet and loud platforms; X = 5 LU).
-- **Per-app mixer**: every app that produces sound gets a fader (mute to +15 dB) on top of the bus; a fader above 0 dB is realised by raising the master and pulling the other apps down.
-- **Volume keys move P**: keyboard volume keys and external volume knobs adjust the comfort level P (1 dB per press) instead of the Windows master volume; can be turned off in Settings.
-- **Restores everything**: on exit all app volumes and the master volume return to where they were.
+We keep adjusting the volume, and it is almost always for the same goal: the sound should feel comfortable.
 
-## Calibration
+AutoLoud lets you state that goal directly. Through the volume adjustments you already make, you tell it "this is how loud I like it"; from then on it keeps learning and adjusting, so your attention stays on the content.
 
-One step: set your external device (headphone amp / speakers / Bluetooth headset) and the Windows master volume to about 80 %, then play music you like — a bundled track, or your own in any app (Spotify, a browser…) selected in the wizard — and slowly raise the fader from 0 to the level you find comfortable. That is your comfort level P.
+## Download and install
 
-Each output device keeps its own calibration. Leave the external device and the master volume alone afterwards — AutoLoud uses them as the reference; P itself can be fine-tuned any time with the dashboard slider.
+1. Download the latest `AutoLoud.exe` from [Releases](https://github.com/SparrowReivun/AutoLoud/releases) (a single file, about 100 MB, no Python needed).
+2. Double-click it. On first launch Windows SmartScreen may say "Windows protected your PC" — click "More info → Run anyway". The exe is not code-signed, which is why.
+3. The calibration wizard opens by itself and takes two minutes. AutoLoud then minimizes to the tray and works quietly.
 
-## Run from source / build
+The interface follows the Windows display language (Chinese or English) and can be switched on the Settings page.
 
-Python 3.10+. In PowerShell:
+## Design principles
 
-```
-.\dev.bat                # venv, dependencies, run from source
-.\build.bat              # build dist\AutoLoud.exe
-python run.py --mock     # any OS: run the UI on a software simulator
-python -m pytest -q      # tests: LUFS vs pyloudnorm, closed-loop controller simulation
-```
+### 1. From action-driven to goal-driven
 
-`.github/workflows/build.yml` runs the tests and builds the exe on every push; a `v*` tag publishes a Release.
+Traditional volume control is reactive: you hear that something is too loud or too quiet, then correct it by hand. Each correction usually solves only the problem in front of you.
+
+AutoLoud treats a volume adjustment as information about your preference. Your action changes the current volume and also tells the system what you are trying to hear, and that goal is carried forward to everything that plays afterwards.
+
+### 2. Stable overall loudness, preserved dynamics
+
+Calm passages and climaxes, quiet dialogue and heavy fights are meant to differ in level. Pulling every sound to one loudness erases those differences and quickly sounds unnatural.
+
+AutoLoud's goal is to remove the uncomfortable loudness differences while keeping the work's own dynamics:
+
+- Quiet passages stay quiet.
+- Intense scenes keep their impact.
+- The whole lands in a more comfortable range.
+
+### 3. Listen more, act less
+
+Automatic control has to respond in time, and it also has to hold back. A short explosion or a line of quiet dialogue should not move the overall volume.
+
+AutoLoud uses a steady-state mechanism: when new content starts, it finds a suitable gain quickly and smoothly; once steady, the bar for adjusting again is raised.
+
+The current design analyses in blocks of about 2 s. Only when several consecutive blocks are all too loud or all too quiet does the system leave the steady state and adjust again.
+
+Analyse constantly, adjust cautiously.
+
+### 4. Learn the loudness distribution instead of applying one fixed target
+
+Even a single application plays both calm and intense content. A fixed band around the user's preferred loudness still interferes with normal level changes.
+
+Early versions tried to hold loudness inside a narrow fixed band. Real-world testing pushed the project towards control based on each application's loudness history, so that content of different intensity gets a different target loudness.
+
+AutoLoud gradually learns each application's distribution of source loudness, then combines it with your preference to map the different loudness levels onto their own target range.
 
 ## How it works
 
-Windows audio engine → per-app session mix → WASAPI loopback capture → BS.1770 meter → gain controller → per-app session volume (≤ 0 dB) and endpoint volume (only above the calibration reference when a boost is needed). See `autoloud/dsp/loudness.py`, `autoloud/core/controller.py`, `autoloud/core/engine.py`, `autoloud/backends/windows.py`.
+### Learning each application's loudness profile
+
+When exactly one application is sounding, the system can work back to its source loudness L_src (every gain removed) and update two reference values for that application:
+
+| Parameter | Meaning |
+| --- | --- |
+| C_low | 20th percentile of the historical source loudness — the quieter level |
+| C_high | 80th percentile of the historical source loudness — the louder level |
+
+Learning is counted in effective sounding time, with a half-life of about 20 minutes. Both values are shown in the mixer and can be relearned by hand.
+
+![AutoLoud mixer](assets/screenshot-mixer.png)
+
+### Computing the target loudness
+
+At the end of every listening block, the system computes where the current source loudness sits between the two references:
+
+```
+u = clip((L_src - C_low) / (C_high - C_low), 0, 1)
+T = (P - X) + X × u
+```
+
+where:
+
+| Parameter | Meaning |
+| --- | --- |
+| P | the user's preference loudness (human preference loudness) |
+| X | the range over which the target may move |
+| u | the position of the current source loudness within the learned range, clipped to 0–1 |
+| T | the current target loudness |
+
+Near the quiet reference the target approaches P − X; near the loud reference it approaches P. Above the loud reference the target stays at P.
+
+This bounds the target loudness. How short sounds actually behave also depends on the controller's response and the steady-state mechanism.
+
+### Fallbacks and relearning
+
+To handle insufficient learning, several applications mixing, and in-app volume changes, the current implementation uses these rules:
+
+| Situation | Handling |
+| --- | --- |
+| Less than 30 s of effective learning | T = P for now |
+| The two references less than 1 LU apart | T = P for now |
+| Several applications sounding at once | source-loudness learning pauses, the last target is kept |
+| No valid source-loudness reading for 60 s | the target falls back to P |
+| Source loudness more than 6 LU below C_low for two minutes | the references are rebuilt from those two minutes, to follow an in-app volume change |
+
+## How the Windows audio side works (for developers)
+
+```
+Windows audio engine ──► per-app session mix ──► WASAPI loopback capture ──► BS.1770 LUFS, live
+                           ▲                                                     │
+                           │ ISimpleAudioVolume (each app's session volume, ≤ 0 dB)│
+                           └──────────────── gain controller ◄───────────────────┘
+                                                │
+                     IAudioEndpointVolume (master volume; above the calibration reference only when a boost is needed)
+```
+
+- `autoloud/dsp/loudness.py` — streaming BS.1770-4: K-weighting, momentary / short-term / gated integrated loudness, within 0.2 LU of pyloudnorm.
+- `autoloud/core/controller.py` — pure-logic gain controller (IDLE → ONSET → ADJUST → STEADY → SAFETY), simulatable offline.
+- `autoloud/core/platforms.py` — per-application source-loudness distribution (C_low / C_high) learning.
+- `autoloud/core/engine.py` — capture → measure → decide → apply volumes; master-volume visibility probe; source-loudness back-calculation.
+- `autoloud/backends/windows.py` — PyAudioWPatch (loopback) + pycaw (volumes); all COM calls on one thread.
+- `autoloud/backends/mock.py` — a software simulator with the same interface.
+- `autoloud/ui/` — PySide6 interface: dashboard, calibration wizard, app mixer, settings, tray.
+
+This "listen and control the volumes" route does not replace the audio stream, so it cannot do per-sample limiting or compression; in return it needs no driver, adds no latency, and always knows which application is sounding. The `Backend` interface is ready for a future virtual-sound-card backend.
+
+Run from source: `pip install -r requirements.txt && python run.py`; tests: `pip install -r requirements-dev.txt && pytest`.
+
+## Logs
+
+Under `%APPDATA%\AutoLoud\`: `autoloud.log` is the run log; `adjust-<timestamp>.log` records every volume decision of a run in the same words as the dashboard's activity card, each line with the apps sounding at that moment; `meters-<timestamp>.csv` (one row per 100 ms: momentary / short-term / window-integrated LUFS, sample peak, total gain, session gain, master boost, phase, P, master volume, the sole sounding app, target T) and `apps-<timestamp>.csv` (one row per sounding app per 0.5 s: peak meter, session volume, bus gain, fader, and the app's source loudness with every gain removed, `src_momentary_lufs` / `src_short_lufs`, while it sounds alone) are raw measurements for analysis. None of these files is pruned.
+
+To see one application's history for a run: `pip install pandas matplotlib`, then `python tools\plot_app.py ZenlessZoneZero.exe` (latest run by default; a run timestamp can follow). It writes `<app>-<timestamp>.png` into the current folder, four panels on one time axis: the app's peak meter (dBFS) and session volume; the bus momentary / short-term / integrated perceived loudness with P, green where only this app was sounding (then the bus loudness is its loudness — the program measures the whole mix's LUFS, there is no per-app LUFS); the app's own source loudness (bus gain, fader and session volume removed, i.e. at 100 % session volume and the reference master; only where it sounded alone); bus gain, fader and session volume.
+
+## Development and testing status
+
+AutoLoud is still being developed and tuned.
+
+Over the past few weeks the project has had more than two hundred hours of development, testing and iteration, producing two candidate versions that were used for tens of hours in games, music and video. Both behave well in the scenarios tested so far.
+
+In the developer's own use, some multi-hour sessions needed one volume adjustment at the start and none afterwards. That is a personal observation under the current test conditions, not yet representative of every device, application or user.
+
+Upcoming validation will focus on:
+
+- whether the number of manual volume adjustments goes down;
+- how long it takes to reach the steady state after new content starts;
+- whether abrupt or unnecessary gain changes occur;
+- how much of the content's dynamics is preserved;
+- control quality when several applications sound at once.
 
 ## License
 
-[CC BY-NC 4.0](LICENSE) — free to use, modify and share with attribution; no commercial use.
+[CC BY-NC 4.0](LICENSE) — free to use, modify and share with attribution; no commercial use. The bundled demo track `McG-pro1` is for calibration only.
+
+AutoLoud builds on automatic-mixing research at QMUL C4DM (Centre for Digital Music).
