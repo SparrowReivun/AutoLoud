@@ -85,7 +85,7 @@ class AppConfig:
     music_dir: str = ""           # folder with <genre>/*.wav|mp3|flac for calibration
     start_minimized: bool = False
     sidebar_collapsed: bool = False
-    startup_master_percent: float = 40.0   # set the Windows master volume to this on start (0 = leave it)
+    startup_master_percent: float = 50.0   # set the Windows master volume to this on start (0 = leave it)
     presets: dict[str, dict] = field(default_factory=dict)   # name -> ControllerParams as a dict
     active_preset: str = ""
     volume_keys: bool = True      # volume keys / knob adjust B instead of the Windows master volume
@@ -93,7 +93,7 @@ class AppConfig:
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
     memory_version: int = 2       # bump to forget every app's remembered gain once
-    presets_version: int = 3      # bump to add new built-in presets once (2: 强力1 / strong-1; 3: its steady triggers)
+    presets_version: int = 4      # bump to add new built-in presets once (2: 强力1; 3: its steady triggers; 4: startup master 50 %)
     mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
 
@@ -116,7 +116,9 @@ class AppConfig:
             cfg.start_minimized = raw.get("start_minimized", False)
             cfg.volume_keys = bool(raw.get("volume_keys", True))
             cfg.sidebar_collapsed = bool(raw.get("sidebar_collapsed", False))
-            cfg.startup_master_percent = float(raw.get("startup_master_percent", 40.0))
+            cfg.startup_master_percent = float(raw.get("startup_master_percent", 50.0))
+            if int(raw.get("presets_version", 1)) < 4 and cfg.startup_master_percent == 40.0:
+                cfg.startup_master_percent = 50.0           # the old default moved to 50 % once
             cfg.presets = {str(k): dict(v) for k, v in raw.get("presets", {}).items() if isinstance(v, dict)}
             cfg.active_preset = str(raw.get("active_preset", ""))
             cfg.volume_key_step_db = float(raw.get("volume_key_step_db", 1.0))
@@ -176,8 +178,8 @@ class AppConfig:
         "强力": dict(onset_below_b_db=7.0, step_up_db=2.0, deadband_down_db=6.0, steady_trigger_db=4.0,
                    steady_under_db=-15.0, safety_margin_db=12.0, safety_land_db=5.0, move_ramp_s=0.2),
         "强力1": dict(onset_below_b_db=7.0, step_up_db=2.0, deadband_up_db=3.0, deadband_down_db=3.0,
-                    steady_trigger_db=3.0, steady_over_blocks=2, steady_under_db=-6.0, steady_under_blocks=4,
-                    safety_margin_db=12.0, safety_land_db=4.0, move_ramp_s=2.0, work_silence_s=12.0,
+                    steady_trigger_db=5.0, steady_over_blocks=2, steady_under_db=-6.0, steady_under_blocks=4,
+                    safety_margin_db=18.0, safety_land_db=4.0, move_ramp_s=0.4, work_silence_s=30.0,
                     target_mode="source", source_range_db=16.0, source_hold_s=60.0),
     }
 

@@ -2,6 +2,8 @@
 
 ## 0.4.1 — 2026-11-02
 
+- Startup master volume default is 50 % (was 40 %; a config still at the old default is moved once). The dashboard now says, under the P slider, that the volume keys / knob move P and no longer the Windows master volume, and where to switch that off.
+- 强力1 preset shipped with a fresh config follows the author's current tuning (steady trigger 5, protection T + 18, 0.4 s moves, 30 s silence).
 - A new work in an app that is not sounding (a browser tab changing its media title behind a game) no longer re-targets the bus: it used to jump the gain to that app's remembered value and bury whatever was playing (seen 18:28 with chrome.exe behind ZenlessZoneZero: −13.9 dB, 28 s to climb back). The activity log notes "changed work while silent: bus gain left alone".
 - Windows build is now a folder (`AutoLoud-windows.zip`, run `AutoLoud\AutoLoud.exe` inside) instead of a single self-extracting exe - the one-file layout is the classic antivirus false-positive trigger ("trojan" warnings reported by downloaders). README explains the warnings and how to verify; docs/RELEASING.md has the false-positive submission steps.
 - The 强力1 preset shipped with a fresh config follows the author's current tuning (dead band ±3 dB, steady trigger 3 dB, 2 s moves, X = 16 LU).

@@ -55,6 +55,8 @@ _T = {
     "status.uncal": ("此设备尚未校准 → 请先校准", "This device is not calibrated yet → run calibration"),
     "dash.b": ("舒适响度 P", "Comfort level P"),
     "dash.b.mute": ("静音", "Muted"),
+    "dash.volkeys.note": ("⚠ 音量键 / 旋钮现在调的是舒适响度 P，不再改 Windows 主音量（这是有意的：主音量由程序接管，开机时设为 {pct:.0f} %）。想恢复按键调系统音量，在设置页关掉「用音量键调节 P」。",
+                          "⚠ Volume keys / knob now move the comfort level P, not the Windows master volume (by design: the master is managed by AutoLoud and set to {pct:.0f} % at start). To give the keys back to Windows, untick \u201cVolume keys adjust P\u201d on the Settings page."),
     "dash.b.hint": ("像音量旋钮一样拖：声音立刻跟着变，停下的位置就是新的目标 P。拖到来源本身达不到的位置时，提升会停在主音量余量的上限（不会削波）。",
                     "Drag it like a volume knob: the sound follows at once and where you stop becomes the new target P. Beyond what the source can reach, the boost stops at the master-volume headroom (no clipping)."),
     "act.off": ("自动响度未在工作", "Auto loudness is not running"),

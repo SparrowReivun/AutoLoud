@@ -90,6 +90,9 @@ class DashboardPage(QWidget):
         bcard.body.addLayout(brow)
         bhint = QLabel(t("dash.b.hint")); bhint.setWordWrap(True); bhint.setObjectName("muted")
         bcard.body.addWidget(bhint)
+        self.volkeys_note = QLabel(""); self.volkeys_note.setWordWrap(True)
+        self.volkeys_note.setStyleSheet(f"color:{theme.WARN}")
+        bcard.body.addWidget(self.volkeys_note)
         trow = QHBoxLayout()
         trow.addWidget(QLabel(t("dash.thr")))
         self.thr_slider = NoWheelSlider(Qt.Horizontal); self.thr_slider.setRange(-10, 50)   # x0.5 dB
@@ -322,6 +325,10 @@ class DashboardPage(QWidget):
         if self.mode_box.currentText() != self.engine.config.active_preset or \
                 self.mode_box.count() != len(self.engine.config.presets):
             self._fill_modes()
+        cfgv = self.engine.config
+        note = t("dash.volkeys.note").format(pct=cfgv.startup_master_percent) if cfgv.volume_keys else ""
+        if self.volkeys_note.text() != note:
+            self.volkeys_note.setText(note); self.volkeys_note.setVisible(bool(note))
         if s.mode_name and s.mode_name != self.engine.config.active_preset and s.source[0]:
             self.mode_note.setText(t("dash.mode.app").format(app=self.engine.config.display_name(s.source[0]), name=s.mode_name))
         else:
