@@ -1,5 +1,8 @@
 """Raw measurement log for later analysis: everything the program measures,
-as CSV, one pair of files per launch in the config folder. Never pruned.
+as CSV, one set of files per launch AND per dashboard mode in the logs folder
+(``…-<ts>-<mode>.csv``, mode = monitor / default / strong / strong1 / …; switching
+the mode closes the set and opens a new one, so each file is one condition).
+Never pruned.
 
 ``meters-<ts>.csv``  one row every 100 ms (the meter hop):
     time, momentary_lufs, short_term_lufs, integrated_lufs, peak_dbfs,
@@ -24,6 +27,7 @@ as CSV, one pair of files per launch in the config folder. Never pruned.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from pathlib import Path
 
@@ -33,9 +37,24 @@ log = logging.getLogger(__name__)
 class MeterLog:
     FLUSH_S = 5.0
 
-    def __init__(self, folder: Path):
+    def __init__(self, folder: Path, mode: str = ""):
+        self.folder = folder
         folder.mkdir(parents=True, exist_ok=True)
-        ts = time.strftime("%Y%m%d-%H%M%S")
+        self._lock = threading.Lock()
+        self.mode = mode
+        self._open(mode)
+
+    def reopen(self, mode: str) -> None:
+        """The dashboard mode changed: close this set of files, start a new one."""
+        with self._lock:
+            self.close()
+            self.mode = mode
+            self._open(mode)
+
+    def _open(self, mode: str) -> None:
+        folder = self.folder
+        ts = time.strftime("%Y%m%d-%H%M%S") + (f"-{mode}" if mode else "")
+        self.run = ts
         self._fm = open(folder / f"meters-{ts}.csv", "a", encoding="utf-8")
         self._fa = open(folder / f"apps-{ts}.csv", "a", encoding="utf-8")
         self._fm.write("time,momentary_lufs,short_term_lufs,integrated_lufs,peak_dbfs,"
@@ -67,9 +86,10 @@ class MeterLog:
                 tgt = f"{cmd.target_lufs:.2f}"
             else:
                 g, tgt = ",,,", ""
-            self._fm.write(f"{self._ts()},{r.momentary:.2f},{r.short_term:.2f},{r.integrated:.2f},"
-                           f"{r.peak_dbfs:.2f},{g},{b_lufs:.2f},{master_db:.2f},{sole_app.replace(',', ' ')},{tgt}\n")
-            self._maybe_flush()
+            with self._lock:
+                self._fm.write(f"{self._ts()},{r.momentary:.2f},{r.short_term:.2f},{r.integrated:.2f},"
+                               f"{r.peak_dbfs:.2f},{g},{b_lufs:.2f},{master_db:.2f},{sole_app.replace(',', ' ')},{tgt}\n")
+                self._maybe_flush()
         except Exception:
             log.exception("meter log")
 
@@ -78,6 +98,7 @@ class MeterLog:
         """Called every session poll."""
         try:
             ts = self._ts()
+            rows = []
             for s in sessions:
                 if s.is_self or not (s.active or s.peak > 0.001):
                     continue
@@ -87,16 +108,19 @@ class MeterLog:
                     src = f"{src_momentary:.2f},{src_short:.2f}"
                 else:
                     src = ","
-                self._fa.write(f"{ts},{name},{s.key},{int(s.active)},{s.peak:.4f},{s.volume:.3f},"
-                               f"{bus_gain_db:.2f},{faders.get(s.name, 0.0):.1f},{src}\n")
-            self._maybe_flush()
+                rows.append(f"{ts},{name},{s.key},{int(s.active)},{s.peak:.4f},{s.volume:.3f},"
+                            f"{bus_gain_db:.2f},{faders.get(s.name, 0.0):.1f},{src}\n")
+            with self._lock:
+                self._fa.write("".join(rows))
+                self._maybe_flush()
         except Exception:
             log.exception("app log")
 
     def volume(self, mode: str, kind: str, delta_db: float, p_lufs: float, master_pct: float, app: str = "") -> None:
         try:
-            self._fv.write(f"{self._ts()},{mode},{kind},{delta_db:+.2f},{p_lufs:.2f},{master_pct:.1f},{app.replace(',', ' ')}\n")
-            self._fv.flush()
+            with self._lock:
+                self._fv.write(f"{self._ts()},{mode},{kind},{delta_db:+.2f},{p_lufs:.2f},{master_pct:.1f},{app.replace(',', ' ')}\n")
+                self._fv.flush()
         except Exception:
             log.exception("volume log")
 

@@ -232,11 +232,12 @@ class DashboardPage(QWidget):
             return
         if not data:
             return
-        self.engine.set_monitor_only(False)
+        self.engine.set_monitor_only(False, rotate=False)
         if data != cfg.active_preset:
             cfg.switch_preset(data)
             self.engine.apply_params()
             self.engine._event("mode", name=data)
+        self.engine.rotate_logs()              # one log set per mode
         cfg.save()
 
     def _b_changed(self, v):
@@ -700,6 +701,7 @@ class SettingsPage(QWidget):
             return
         cfg.switch_preset(name)
         self.engine.apply_params()
+        self.engine.rotate_logs()
         self._reload_spins()
         cfg.save()
         self.status.setText(t("preset.switched").format(name=name))

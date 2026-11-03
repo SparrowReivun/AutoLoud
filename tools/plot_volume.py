@@ -5,7 +5,7 @@
     python tools/plot_volume.py --titles chrome.exe  # which app's window titles to print under the axis
 
 Reads volume-<ts>.csv, meters-<ts>.csv and adjust-<ts>.log from the AutoLoud
-config folder and writes volume-<ts>.png into the current folder. Two panels
+logs folder and writes volume-<ts>.png into the current folder. Two panels
 over the same time axis, both in dB:
 
   1. the user's own volume moves - in monitor mode the Windows master (dB) with
@@ -55,9 +55,11 @@ def _cjk_font() -> None:
 
 
 def config_dir() -> Path:
+    """The logs folder (logs/ next to the program; older runs may be in the config folder)."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from autoloud.core.profiles import config_dir as _cd
-    return _cd()
+    from autoloud.core.profiles import config_dir as _cd, log_dir
+    d = log_dir()
+    return d if any(d.glob("meters-*.csv")) else _cd()
 
 
 def titles_from_log(path: Path, app: str, day: str, t_end: pd.Timestamp, min_s: float = 3.0):
@@ -112,7 +114,7 @@ def mark_clipped(ax, t, y, floor, colour="#d62728"):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("run", nargs="?", help="run timestamp YYYYMMDD-HHMMSS (default: latest)")
-    ap.add_argument("--csv-dir", help="folder with the logs (default: config folder)")
+    ap.add_argument("--csv-dir", help="folder with the logs (default: logs folder)")
     ap.add_argument("--titles", default="chrome.exe", help="app whose window titles go under the axis")
     ap.add_argument("--out", help="output PNG (default: volume-<run>.png in the current folder)")
     a = ap.parse_args()

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 
 from autoloud.backends.base import make_backend
 from autoloud.core.engine import Engine
-from autoloud.core.profiles import AppConfig, config_dir
+from autoloud.core.profiles import AppConfig, config_dir, log_dir
 
 
 _ENGINE: dict = {}      # the running engine, for the crash handlers
@@ -19,7 +19,7 @@ def _install_crash_handlers() -> None:
     import faulthandler
     import traceback
     try:
-        _crash_file = open(config_dir() / "crash.log", "a", encoding="utf-8")
+        _crash_file = open(log_dir() / "crash.log", "a", encoding="utf-8")
         faulthandler.enable(file=_crash_file, all_threads=True)
     except Exception:
         pass
@@ -43,7 +43,7 @@ def main(argv=None) -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[logging.FileHandler(config_dir() / "autoloud.log", encoding="utf-8"),
+        handlers=[logging.FileHandler(log_dir() / "autoloud.log", encoding="utf-8"),
                   logging.StreamHandler()],
     )
     argv = list(sys.argv if argv is None else argv)
@@ -74,10 +74,12 @@ def main(argv=None) -> int:
     atexit.register(lambda: engine.emergency_exit() if engine._running else None)
     # every decision, in the dashboard's words, into adjust-<timestamp>.log
     from autoloud.core.adjustlog import AdjustLog
-    adjust_log = AdjustLog(config_dir(), DashboardPage._fmt_event)
+    adjust_log = AdjustLog(log_dir(), DashboardPage._fmt_event, engine.dashboard_mode_slug())
     engine.on_event = adjust_log
+    engine.adjust_log = adjust_log
     from autoloud.core.meterlog import MeterLog
-    engine.meter_log = MeterLog(config_dir())          # raw measurements, meters-/apps-<ts>.csv
+    engine.meter_log = MeterLog(log_dir(), engine.dashboard_mode_slug())   # raw measurements, meters-/apps-/volume-<ts>-<mode>.csv
+    logging.getLogger("autoloud").info("logs in %s", log_dir())
     win.start()
     # volume keys / knob move B instead of the Windows master volume (Windows only)
     from autoloud.backends.volumekeys_windows import VolumeKeys

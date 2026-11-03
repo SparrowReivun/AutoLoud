@@ -47,6 +47,45 @@ def config_dir() -> Path:
     return d
 
 
+def app_dir() -> Path:
+    """Where the program lives: next to AutoLoud.exe, or the project root from source."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[2]
+
+
+def log_dir() -> Path:
+    """``logs/`` next to the program (easy to find), unless that folder cannot be
+    written (e.g. installed under Program Files) - then the config folder.
+    ``AUTOLOUD_LOG_DIR`` overrides both."""
+    override = os.environ.get("AUTOLOUD_LOG_DIR")
+    candidates = [Path(override)] if override else [app_dir() / "logs"]
+    for d in candidates:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            probe = d / ".write-test"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+            return d
+        except Exception:
+            continue
+    return config_dir()
+
+
+MODE_SLUGS = {"默认": "default", "强力": "strong", "强力1": "strong1"}
+
+
+def mode_slug(mode: str) -> str:
+    """ASCII tag for log file names: monitor / default / strong / strong1 / a custom
+    preset's ASCII letters and digits (or 'preset' when it has none)."""
+    if mode == "monitor":
+        return "monitor"
+    if mode in MODE_SLUGS:
+        return MODE_SLUGS[mode]
+    s = "".join(ch for ch in mode if ch.isascii() and (ch.isalnum() or ch in "-_")).strip("-_")
+    return s.lower() or "preset"
+
+
 @dataclass
 class DeviceProfile:
     device_id: str

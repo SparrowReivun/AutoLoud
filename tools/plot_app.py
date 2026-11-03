@@ -4,7 +4,7 @@
     python tools/plot_app.py ZenlessZoneZero.exe 20261101-141026  # a specific run
     python tools/plot_app.py ZenlessZoneZero.exe --csv-dir "C:\\Users\\me\\AppData\\Roaming\\AutoLoud"
 
-Reads apps-<ts>.csv and meters-<ts>.csv from the AutoLoud config folder and
+Reads apps-<ts>.csv and meters-<ts>.csv from the AutoLoud logs folder and
 writes <app>-<ts>.png into the current folder, three panels over the same time axis:
 
   1. the app's own peak meter (Windows IAudioMeterInformation, as dBFS) and
@@ -33,16 +33,18 @@ import matplotlib.pyplot as plt
 
 
 def config_dir() -> Path:
+    """The logs folder (logs/ next to the program; older runs may be in the config folder)."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from autoloud.core.profiles import config_dir as _cd
-    return _cd()
+    from autoloud.core.profiles import config_dir as _cd, log_dir
+    d = log_dir()
+    return d if any(d.glob("meters-*.csv")) else _cd()
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("app", help="process name as shown in the mixer, e.g. ZenlessZoneZero.exe")
     ap.add_argument("run", nargs="?", help="run timestamp YYYYMMDD-HHMMSS (default: latest)")
-    ap.add_argument("--csv-dir", help="folder with the meters-/apps-*.csv files (default: config folder)")
+    ap.add_argument("--csv-dir", help="folder with the meters-/apps-*.csv files (default: logs folder)")
     ap.add_argument("--out", help="output PNG (default: <app>-<run>.png in the current folder)")
     a = ap.parse_args()
 

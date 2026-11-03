@@ -406,6 +406,25 @@ class Engine:
 
     on_event = None      # optional sink(wall_time, kind, data, sounding_apps) -> None, e.g. the adjustment log
     meter_log = None     # optional MeterLog: raw measurements for analysis
+    adjust_log = None    # optional AdjustLog (also wired as on_event)
+
+    def dashboard_mode_slug(self) -> str:
+        """ASCII tag of the dashboard mode for log file names (monitor / default / strong1 …)."""
+        from autoloud.core.profiles import mode_slug
+        return mode_slug("monitor" if self.config.monitor_only else self.config.active_preset)
+
+    def rotate_logs(self) -> None:
+        """The dashboard mode changed: every per-run log (adjust / meters / apps /
+        volume) continues in a fresh file named after the new mode, so one file
+        is always one condition. No-op when the mode tag did not change."""
+        slug = self.dashboard_mode_slug()
+        for lg in (self.meter_log, self.adjust_log):
+            if lg is not None and getattr(lg, "mode", None) != slug:
+                try:
+                    lg.reopen(slug)
+                except Exception:
+                    log.exception("log rotate")
+        self._event("logs_rotated", mode=slug)
 
     def _sounding_apps(self) -> list[str]:
         """Short description of the apps making sound right now (no volumes)."""
@@ -592,7 +611,7 @@ class Engine:
         self._event("strong_cut", app=self.config.display_name(s.name), excess=excess, off=mix.offset_db)
         self.mixer_changed()
 
-    def set_monitor_only(self, on: bool) -> None:
+    def set_monitor_only(self, on: bool, rotate: bool = True) -> None:
         """Dashboard mode "monitor only": keep measuring, learning and showing,
         but put every session back to 100 % and touch no volume until it is
         switched off again. Settings, faders and presets are left untouched."""
@@ -614,6 +633,8 @@ class Engine:
                 self._last_cmd = None
         self._event("monitor_on" if on else "monitor_off")
         self._dirty = True
+        if rotate:
+            self.rotate_logs()
 
     def set_app_preset(self, app_name: str, preset: str) -> None:
         """Mixer drop-down: the parameter preset the bus runs with while this
