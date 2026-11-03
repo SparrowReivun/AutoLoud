@@ -22,6 +22,7 @@ import numpy as np
 from scipy.signal import lfilter, lfilter_zi
 
 ABS_GATE_LUFS = -70.0
+GATE_FLOOR_LUFS = -105.0   # the gate never goes below this (float loopback noise is far lower still)
 REL_GATE_LU = -10.0
 MIN_LUFS = -100.0
 
@@ -84,7 +85,8 @@ class LoudnessReading:
     short_term: float     # LUFS, 3 s
     integrated: float     # LUFS, gated, over the rolling window
     peak_dbfs: float      # sample peak of the last chunk
-    has_signal: bool      # momentary above absolute gate
+    has_signal: bool      # momentary above the absolute gate
+    gate_lufs: float = ABS_GATE_LUFS   # the gate in force (lowered by the gain the loopback already contains)
 
 
 class StreamingLoudnessMeter:
@@ -119,6 +121,17 @@ class StreamingLoudnessMeter:
         self.reset_integration()
 
     # ------------------------------------------------------------------
+    # The loopback measures the mix AFTER the session volumes AutoLoud sets. With a
+    # big cut applied (say -50 dB) perfectly normal content sits at -90 LUFS in the
+    # loopback, far under BS.1770's absolute gate meant for programme material, and
+    # would count as silence: no block, no source, no way up. So the gate follows
+    # the gain that is inside the loopback: gate = -70 + offset (offset <= 0).
+    gate_offset_db = 0.0
+
+    @property
+    def abs_gate(self) -> float:
+        return max(GATE_FLOOR_LUFS, ABS_GATE_LUFS + min(0.0, self.gate_offset_db))
+
     def reset_integration(self) -> None:
         self.block_powers.clear()
 
@@ -192,7 +205,7 @@ class StreamingLoudnessMeter:
         return _pow_to_lufs(sum(h) / len(h))
 
     def integrated(self) -> float:
-        return gated_loudness(self.block_powers)
+        return gated_loudness(self.block_powers, self.abs_gate)
 
     def reading(self) -> LoudnessReading:
         m = self.momentary()
@@ -201,16 +214,17 @@ class StreamingLoudnessMeter:
             short_term=self.short_term(),
             integrated=self.integrated(),
             peak_dbfs=20.0 * math.log10(self.last_peak) if self.last_peak > 0 else MIN_LUFS,
-            has_signal=m > ABS_GATE_LUFS,
+            has_signal=m > self.abs_gate,
+            gate_lufs=self.abs_gate,
         )
 
 
-def gated_loudness(block_powers) -> float:
+def gated_loudness(block_powers, abs_gate_lufs: float = ABS_GATE_LUFS) -> float:
     """BS.1770-4 gated integrated loudness from 400 ms block powers."""
     if not block_powers:
         return MIN_LUFS
     p = np.fromiter(block_powers, dtype=np.float64)
-    abs_thr = _db_to_pow(ABS_GATE_LUFS + 0.691)
+    abs_thr = _db_to_pow(abs_gate_lufs + 0.691)
     p1 = p[p > abs_thr]
     if p1.size == 0:
         return MIN_LUFS

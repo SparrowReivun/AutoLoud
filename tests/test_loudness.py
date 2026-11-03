@@ -47,3 +47,21 @@ def test_silence_reports_no_signal():
     r = m.process(np.zeros((48000, 2)))
     assert not r.has_signal
     assert r.integrated <= -70
+
+
+def test_gate_follows_the_gain_inside_the_loopback():
+    """A -50 dB session cut puts ordinary content at -85 LUFS in the loopback:
+    with the plain BS.1770 gate that is 'silence'; with the gate lowered by
+    the cut it is measured like any other signal."""
+    fs = 48000
+    quiet = _sine(fs, 4.0, amp=0.5 * 10 ** (-80 / 20))        # ~ -86 LUFS (stereo 1 kHz, 0.5 = -6 LUFS)
+    m = StreamingLoudnessMeter(fs, 2)
+    r = m.process(quiet)
+    assert not r.has_signal and r.integrated <= -70 and r.gate_lufs == -70.0
+    m = StreamingLoudnessMeter(fs, 2)
+    m.gate_offset_db = -50.0
+    r = m.process(quiet)
+    assert r.gate_lufs == -105.0                                 # -70 - 50 floored at -105
+    assert r.has_signal and -90 < r.integrated < -80 and -90 < r.short_term < -80
+    m.gate_offset_db = +10.0                                    # a boost never raises the gate
+    assert m.abs_gate == -70.0

@@ -220,6 +220,13 @@ class Engine:
     def _on_audio(self, x: np.ndarray) -> None:
         if self.meter is None:
             return
+        # the gate follows the gain the loopback already contains (session cut, visible master)
+        cmd0 = self._last_cmd
+        if cmd0 is not None and not self.config.monitor_only:
+            vis = cmd0.master_offset_db if (self.profile is not None and self.profile.master_visible_in_loopback) else 0.0
+            self.meter.gate_offset_db = min(0.0, cmd0.session_gain_db + vis)
+        else:
+            self.meter.gate_offset_db = 0.0
         r = self.meter.process(x)
         with self._reading_lock:
             self._reading = r
@@ -541,7 +548,7 @@ class Engine:
         the whole mix after the session volumes, so this is exact only when
         exactly one app sounds; otherwise ("", None, None)."""
         snd = self._sounding(sessions)
-        if len(snd) != 1 or cmd is None or r.short_term <= -90:
+        if len(snd) != 1 or cmd is None or r.short_term <= r.gate_lufs:
             return "", None, None
         s = snd[0]
         vol_db = 20.0 * math.log10(max(s.volume, 1e-6))
@@ -549,7 +556,7 @@ class Engine:
         seen_master = cmd.master_offset_db if (self.profile is not None and
                                                self.profile.master_visible_in_loopback) else 0.0
         return (s.name,
-                r.momentary - seen_master - vol_db if r.momentary > -90 else None,
+                r.momentary - seen_master - vol_db if r.momentary > r.gate_lufs else None,
                 r.short_term - seen_master - vol_db)
 
     def _track_peaks(self, sessions: list[AudioSession], cmd: GainCommand) -> None:

@@ -294,7 +294,7 @@ class GainController:
         g_now = self._ramp.value(now)
         new_gain = g_now + delta_db
         est = self._perceived_short_term(now)
-        if est is not None and not (-90.0 < est < 10.0):      # a loopback cannot read that: ignore it
+        if est is not None and not (-110.0 < est < 10.0):     # a loopback cannot read that: ignore it
             est = None
         if self.phase in (Phase.ADJUST, Phase.STEADY) and est is not None:
             new_gain = g_now + (self.t_lufs - est)     # one step to the needed gain
@@ -311,7 +311,7 @@ class GainController:
         """Perceived loudness over the last 3 s *as if* the current gain had
         applied throughout (so a ramp in progress does not skew it)."""
         r = self._last_r
-        if r is None or r.short_term <= ABS_GATE_LUFS or not r.has_signal:
+        if r is None or r.short_term <= r.gate_lufs or not r.has_signal:
             return None
         g = self._ramp.value(now)
         return (r.short_term - self._mean_gain(now, 3.0)
@@ -456,7 +456,7 @@ class GainController:
         if self.phase == Phase.ONSET:
             f = min(1.0, (now - self._onset_t) / max(1e-3, p.listen_s))
             target_lufs = self.a_lufs + (self.t_lufs - self.a_lufs) * f
-            src = self._source_est if r.momentary > ABS_GATE_LUFS else p.onset_guard_lufs
+            src = self._source_est if r.momentary > r.gate_lufs else p.onset_guard_lufs
             self._ramp.retarget(now, self._clamp(min(target_lufs - src, onset_cap_db)), 0.25)
             if f >= 1.0:
                 self.phase = Phase.ADJUST
@@ -515,7 +515,7 @@ class GainController:
         during a block and the hidden part (master boost the loopback cannot
         see) is simply that of the current gain.
         """
-        if r.integrated <= ABS_GATE_LUFS or r.integrated > 10.0:    # > +10 LUFS is not audio, it is garbage
+        if r.integrated <= r.gate_lufs or r.integrated > 10.0:    # > +10 LUFS is not audio, it is garbage
             return None
         return r.integrated + self._hidden_gain(self._ramp.value(now))
 

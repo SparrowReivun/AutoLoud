@@ -307,7 +307,7 @@ class DashboardPage(QWidget):
         self.m_mom.set_value(r.momentary + hid if r.momentary > -100 else r.momentary)
         self.m_st.set_value(r.short_term + hid if r.short_term > -100 else r.short_term)
         self.m_int.set_value(r.integrated + hid if r.integrated > -100 else r.integrated)
-        self.raw_lbl.setText(f"{t('meter.raw')}: " + (f"{r.short_term:.1f} LUFS" if r.short_term > -90 else "—"))
+        self.raw_lbl.setText(f"{t('meter.raw')}: " + (f"{r.short_term:.1f} LUFS" if r.short_term > r.gate_lufs else "—"))
         sole, _sm, ss = self.engine.source_loudness(s.sessions, r, s.command)
         self.src_lbl.setText(f"{t('meter.source')}: " + (
             f"{ss:.1f} LUFS  ({self.engine.config.display_name(sole)})" if ss is not None else "—"))
