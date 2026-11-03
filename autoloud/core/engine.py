@@ -723,6 +723,19 @@ class Engine:
         self._source_now = (sole, ss, lo, hi)
         if self.controller is not None:
             self.controller.set_source(now, ss if sole else None, lo, hi)
+        # Several apps comparably loud in the mix for a while: say so once a minute, naming
+        # the ones the bus does not control (OBS monitoring the desktop at 100 % is the classic
+        # case - a copy of the music that AutoLoud neither attenuates nor can attribute).
+        snd_all = self._sounding(sessions)
+        if not sole and len(snd_all) >= 2:
+            self._shared_since = getattr(self, "_shared_since", None) or now
+            if now - self._shared_since > 10.0 and now - getattr(self, "_shared_told", -1e9) > 60.0:
+                self._shared_told = now
+                free = [self.config.display_name(x.name) for x in snd_all if not self._follows_bus(x.name)]
+                self._event("mix_shared", apps="、".join(self.config.display_name(x.name) for x in snd_all),
+                            free="、".join(free) if free else "—")
+        else:
+            self._shared_since = None
         # the sole app's own preset drives the bus while it sounds alone
         dom = self._dominant(sessions)
         want = ""
