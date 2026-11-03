@@ -135,9 +135,15 @@ def main() -> int:
             v = folder / f"volume-{r}.csv"
             n = max(0, sum(1 for _ in v.open(encoding="utf-8")) - 1)
             m = folder / f"meters-{r}.csv"
-            import time as _t
-            start = _t.mktime(_t.strptime(r[:15], "%Y%m%d-%H%M%S"))
-            mins = (m.stat().st_mtime - start) / 60 if m.exists() else 0
+            mins = 0.0
+            if m.exists() and m.stat().st_size > 200:        # last row's time - the run's start
+                with m.open("rb") as fh:
+                    fh.seek(-200, 2); last = fh.read().decode("utf-8", "replace").strip().splitlines()[-1]
+                try:
+                    end = pd.Timestamp(last.split(",")[0]); start = pd.Timestamp(r[:4] + "-" + r[4:6] + "-" + r[6:8] + " " + r[9:11] + ":" + r[11:13] + ":" + r[13:15])
+                    mins = (end - start).total_seconds() / 60
+                except Exception:
+                    pass
             print(f"  {r:32s}  {n:4d} user moves   {max(mins, 0):5.0f} min")
         return 0
     run = a.run or runs[-1]

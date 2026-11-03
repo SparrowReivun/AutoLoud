@@ -817,9 +817,11 @@ class MainWindow(QMainWindow):
         self._set_sidebar(engine.config.sidebar_collapsed, animate=False)
         self._go(0)
 
-        # engine → UI (thread-safe via signal)
+        # engine → UI: the UI *polls* the engine's state snapshot 10x a second.
+        # (It used to also receive every state change as a queued cross-thread signal,
+        # 100+ per second, each carrying a snapshot; whenever the GUI thread fell behind
+        # the queue only ever grew - after ~4 h that was a MemoryError.)
         self.state_changed.connect(self._on_state)
-        engine.listeners.append(self.state_changed.emit)
         self.dash.device_box.currentIndexChanged.connect(self._device_changed)
 
         self._ui_timer = QTimer(self); self._ui_timer.setInterval(100)

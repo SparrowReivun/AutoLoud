@@ -239,6 +239,19 @@ class Engine:
     _SILENT = LoudnessReading(momentary=MIN_LUFS, short_term=MIN_LUFS, integrated=MIN_LUFS,
                               peak_dbfs=-100.0, has_signal=False)
 
+    def _memory_watch(self, now: float) -> None:
+        """Every 10 min: the process's memory in autoloud.log, so a slow leak
+        shows up as a trend long before it becomes a MemoryError."""
+        if now - getattr(self, "_mem_t", 0.0) < 600.0:
+            return
+        self._mem_t = now
+        try:
+            import psutil
+            rss = psutil.Process().memory_info().rss / 1e6
+            log.info("memory: %.0f MB rss, %d threads", rss, threading.active_count())
+        except Exception:
+            pass
+
     def _capture_watch(self, r: LoudnessReading, sessions: list[AudioSession], now: float) -> LoudnessReading:
         """The WASAPI loopback stream can die quietly (a Bluetooth headset
         re-negotiating, a device change): the callback just stops and the
@@ -291,6 +304,7 @@ class Engine:
                 r = self._reading
             now = t0
             r = self._capture_watch(r, sessions, now)
+            self._memory_watch(now)
             try:
                 if now >= next_poll:
                     next_poll = now + self.SESSION_POLL_S
