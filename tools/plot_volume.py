@@ -163,7 +163,7 @@ def main() -> int:
     in_auto = pd.Series(False, index=met.index)
     for s, e, mode in mode_segs:
         if mode != "monitor":
-            in_auto |= (met["time"] >= s) & (met["time"] < e)
+            in_auto |= (met["time"] >= s) & (met["time"] <= e)
     master_mon = met["master_db"].where(~in_auto)
     p_auto = met["b_lufs"].where(in_auto)
     level = master_mon.fillna(p_auto)                     # the user-controlled level, whichever it is
@@ -197,7 +197,7 @@ def main() -> int:
         glo, ghi = tight_ylim(gain, 1.0, 99.5)
         ax2.plot(met["time"], gain.clip(lower=glo), color="#7b3fa0", lw=1.3, label="AutoLoud 自动总增益（dB）")
         mark_clipped(ax2, met["time"], gain, glo, colour="#7b3fa0")
-        if (~in_auto).any():
+        if (~in_auto).mean() > 0.01:
             ax2.text(0.99, 0.95, "仅监测时段：AutoLoud 不动任何音量，故无增益曲线", transform=ax2.transAxes,
                      ha="right", va="top", fontsize=8.5, color="grey")
         ax2.set_ylim(glo, ghi)
