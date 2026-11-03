@@ -345,6 +345,10 @@ class Engine:
                     except Exception:
                         master_db = 0.0
                     self._last_master_db = master_db
+                    try:
+                        self._master_pct = float(self.backend.get_master_scalar(self.device)) * 100
+                    except Exception:
+                        pass
                     self._check_master_moved(master_db)
                     self._set_state(sessions=sessions, master_db=master_db,
                                     works=self.works.all_current(),
@@ -594,6 +598,10 @@ class Engine:
         self.config.monitor_only = on
         if on:
             self._restore_volumes()               # neutral volumes while we only watch
+            try:
+                self._applied_master_db = float(self.backend.get_master_db(self.device))   # baseline for counting the user's moves
+            except Exception:
+                pass
         else:
             self._applied_session_db.clear(); self._applied_master_db = None   # re-apply on the next tick
         self._event("monitor_on" if on else "monitor_off")
@@ -722,13 +730,48 @@ class Engine:
         self._dirty = True
         self._set_state(profile=self.profile)
 
-    def nudge_b(self, delta_db: float) -> None:
+    def _mode_name(self) -> str:
+        return "monitor" if self.config.monitor_only else (self._param_override or self.config.active_preset)
+
+    def _log_volume(self, kind: str, delta_db: float, app: str = "") -> None:
+        if self.meter_log is None:
+            return
+        try:
+            pct = float(self.backend.get_master_scalar(self.device)) * 100 if self.device is not None else -1.0
+        except Exception:
+            pct = -1.0
+        self.meter_log.volume(self._mode_name(), kind, delta_db,
+                              self.profile.b_lufs if self.profile is not None else 0.0, pct, app)
+
+    # ---- monitor only: plain master volume control ---------------------------
+    def master_percent(self) -> float:
+        return getattr(self, "_master_pct", -1.0)
+
+    def set_master_percent(self, pct: float) -> None:
+        """Monitor only: the dashboard slider sets the Windows master volume directly."""
+        if self.device is None:
+            return
+        pct = max(0.0, min(100.0, pct))
+        try:
+            before = self.master_percent()
+            self.backend.set_master_scalar(self.device, pct / 100.0)
+            self._master_pct = pct
+            self._applied_master_db = float(self.backend.get_master_db(self.device))   # our move, not the user's
+            self._event("master_slider", pct=pct)
+            if self.meter_log is not None:
+                self.meter_log.volume(self._mode_name(), "master_slider", pct - before, 
+                                      self.profile.b_lufs if self.profile is not None else 0.0, pct)
+        except Exception:
+            log.exception("set master percent")
+
+    def nudge_b(self, delta_db: float, kind: str = "volkey") -> None:
         """Volume keys / knob: move the comfort level B by ``delta_db``."""
         if self.profile is None:
             return
         self.set_target_b(max(B_MUTE_LUFS, min(0.0, self.profile.b_lufs + delta_db)))
         log.info("volume key: B %+.1f dB -> %.1f LUFS", delta_db, self.profile.b_lufs)
         self._event("volkey", delta=delta_db, b=self.profile.b_lufs)
+        self._log_volume(kind, delta_db)
 
     def resume_after_safety(self) -> None:
         """The protection notice closed (or 5 s passed): re-adjust from here."""
@@ -745,6 +788,17 @@ class Engine:
         if abs(delta) < 0.5:
             return
         p = self.profile
+        if self.config.monitor_only:
+            # monitor only: the user's own master moves are counted, not converted or undone
+            self._applied_master_db = master_db
+            try:
+                pct = float(self.backend.get_master_scalar(self.device)) * 100
+            except Exception:
+                pct = -1.0
+            log.info("monitor: user moved the master by %+.1f dB (now %.0f%%)", delta, pct)
+            self._event("user_master", delta=delta, pct=pct)
+            self._log_volume("user_master", delta)
+            return
         if self.config.volume_keys:
             # The keys / knob mean "P", but the hook cannot see them while an elevated
             # window (most games with anti-cheat) is in front: Windows then moves the
@@ -766,7 +820,7 @@ class Engine:
                     log.exception("re-park master")
             log.info("master moved by %+.1f dB behind the hook (%d press(es)): P %+.1f dB, master parked again", delta, presses, step)
             self._event("volkey_master", delta=step, presses=presses)
-            self.nudge_b(step)
+            self.nudge_b(step, kind="volkey_master")
             return
         p.master_ref_db += delta
         if p.master_visible_in_loopback:      # loopback moved too: targets move with it

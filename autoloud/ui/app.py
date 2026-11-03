@@ -81,7 +81,9 @@ def main(argv=None) -> int:
     win.start()
     # volume keys / knob move B instead of the Windows master volume (Windows only)
     from autoloud.backends.volumekeys_windows import VolumeKeys
-    volkeys = VolumeKeys(lambda d: engine.nudge_b(d * cfg.volume_key_step_db), lambda: cfg.volume_keys)
+    # in monitor-only mode the keys are left to Windows (so the user's own moves are counted as such)
+    volkeys = VolumeKeys(lambda d: engine.nudge_b(d * cfg.volume_key_step_db),
+                         lambda: cfg.volume_keys and not cfg.monitor_only)
     volkeys.start()
     if not cfg.start_minimized:
         win.show()

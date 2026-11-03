@@ -88,7 +88,9 @@ class DashboardPage(QWidget):
         brow.addWidget(self.b_slider, 1)
         self.b_val = QLabel("—"); self.b_val.setMinimumWidth(110); brow.addWidget(self.b_val)
         bcard.body.addLayout(brow)
+        self._slider_master = False          # monitor only: the slider is the Windows master volume (0-100 %)
         bhint = QLabel(t("dash.b.hint")); bhint.setWordWrap(True); bhint.setObjectName("muted")
+        self.bhint = bhint
         bcard.body.addWidget(bhint)
         self.volkeys_note = QLabel(""); self.volkeys_note.setWordWrap(True); self.volkeys_note.setObjectName("muted")
         bcard.body.addWidget(self.volkeys_note)
@@ -238,8 +240,28 @@ class DashboardPage(QWidget):
         cfg.save()
 
     def _b_changed(self, v):
+        if self._slider_master:
+            self.engine.set_master_percent(float(v))
+            self.b_val.setText(f"{v} %")
+            return
+        before = self.engine.profile.b_lufs if self.engine.profile is not None else v / 10.0
         self.engine.set_target_b(v / 10.0)
+        self.engine._log_volume("p_slider", v / 10.0 - before)
         self.b_val.setText(t("dash.b.mute") if v <= -900 else f"{v / 10.0:.1f} LUFS")
+
+    def _set_slider_role(self, master: bool):
+        """Monitor only: the comfort slider becomes a plain Windows master volume control."""
+        if master == self._slider_master:
+            return
+        self._slider_master = master
+        self.b_slider.blockSignals(True)
+        if master:
+            self.b_slider.setRange(0, 100); self.b_slider.setTickInterval(10); self.b_slider.setPageStep(5)
+            self.b_lbl.setText(t("dash.master")); self.bhint.setText(t("dash.master.hint"))
+        else:
+            self.b_slider.setRange(-900, 0); self.b_slider.setTickInterval(100); self.b_slider.setPageStep(10)
+            self.b_lbl.setText(t("dash.b")); self.bhint.setText(t("dash.b.hint"))
+        self.b_slider.blockSignals(False)
 
     def _thr_changed(self, v):
         self.engine.config.params.safety_margin_db = v / 2.0
@@ -289,7 +311,14 @@ class DashboardPage(QWidget):
         self.src_lbl.setText(f"{t('meter.source')}: " + (
             f"{ss:.1f} LUFS  ({self.engine.config.display_name(sole)})" if ss is not None else "—"))
         p = s.profile
-        if p is not None and not self.b_slider.isSliderDown():
+        self._set_slider_role(self.engine.config.monitor_only)
+        if self._slider_master:
+            if not self.b_slider.isSliderDown():
+                pct = int(round(self.engine.master_percent()))
+                if pct != self.b_slider.value():
+                    self.b_slider.blockSignals(True); self.b_slider.setValue(pct); self.b_slider.blockSignals(False)
+                self.b_val.setText(f"{pct} %")
+        elif p is not None and not self.b_slider.isSliderDown():
             v = int(round(p.b_lufs * 10))
             if v != self.b_slider.value():
                 self.b_slider.blockSignals(True); self.b_slider.setValue(v); self.b_slider.blockSignals(False)
@@ -504,8 +533,10 @@ class AppsPage(QWidget):
         def fmt(v): return "mute" if v <= MUTE else f"{v:+d} dB"
         val = QLabel(fmt(sl.value())); val.setMinimumWidth(56)
         def changed(v, m=mix, n=name, l=val):
+            before = m.offset_db
             m.offset_db = -200.0 if v <= MUTE else float(v); l.setText(fmt(v))
             self.engine.user_touched_fader(n); self._save_timer.start()
+            self.engine._log_volume("fader", m.offset_db - before, n)
         sl.valueChanged.connect(changed)
         reset = QPushButton("0 dB"); reset.setFixedWidth(56); reset.setToolTip(t("apps.reset"))
         reset.clicked.connect(lambda _c, s=sl: s.setValue(0))

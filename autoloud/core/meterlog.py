@@ -9,6 +9,10 @@ as CSV, one pair of files per launch in the config folder. Never pruned.
     what the dashboard shows when the master is not in the loopback; sole_app
     is the one app sounding at that moment, blank when none or several)
 
+``volume-<ts>.csv``  one row per volume action by the user (keys, knob, P slider, fader,
+    master moves), with the mode in force - for counting how often the user still
+    reaches for the volume.
+
 ``apps-<ts>.csv``  one row per sounding-or-active app per session poll (0.5 s):
     time, app, key, active, peak, volume, bus_gain_db, fader_db,
     src_momentary_lufs, src_short_lufs
@@ -38,6 +42,12 @@ class MeterLog:
                        "gain_total_db,session_gain_db,master_boost_db,phase,b_lufs,master_db,sole_app,target_lufs\n")
         self._fa.write("time,app,key,active,peak,volume,bus_gain_db,fader_db,"
                        "src_momentary_lufs,src_short_lufs\n")
+        # every volume action the user takes, for counting: kind = volkey (hook, moved P) |
+        # volkey_master (Windows moved the master behind the hook, converted to P) |
+        # user_master (monitor only: the user moved the master, nothing converted) |
+        # p_slider | fader
+        self._fv = open(folder / f"volume-{ts}.csv", "a", encoding="utf-8")
+        self._fv.write("time,mode,kind,delta_db,p_lufs,master_pct,app\n")
         self._last_flush = time.time()
         self._last_meter_row = 0.0
 
@@ -83,6 +93,13 @@ class MeterLog:
         except Exception:
             log.exception("app log")
 
+    def volume(self, mode: str, kind: str, delta_db: float, p_lufs: float, master_pct: float, app: str = "") -> None:
+        try:
+            self._fv.write(f"{self._ts()},{mode},{kind},{delta_db:+.2f},{p_lufs:.2f},{master_pct:.1f},{app.replace(',', ' ')}\n")
+            self._fv.flush()
+        except Exception:
+            log.exception("volume log")
+
     def _maybe_flush(self) -> None:
         t = time.time()
         if t - self._last_flush > self.FLUSH_S:
@@ -90,7 +107,7 @@ class MeterLog:
             self._fm.flush(); self._fa.flush()
 
     def close(self) -> None:
-        for f in (self._fm, self._fa):
+        for f in (self._fm, self._fa, self._fv):
             try:
                 f.close()
             except Exception:
