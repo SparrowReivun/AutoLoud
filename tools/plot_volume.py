@@ -22,6 +22,7 @@ so each burst of moves can be matched to the track that was playing.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -56,10 +57,13 @@ def _cjk_font() -> None:
 
 def config_dir() -> Path:
     """The logs folder (logs/ next to the program; older runs may be in the config folder)."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from autoloud.core.profiles import config_dir as _cd, log_dir
-    d = log_dir()
-    return d if any(d.glob("meters-*.csv")) else _cd()
+    root = Path(__file__).resolve().parents[1]
+    d = Path(os.environ.get("AUTOLOUD_LOG_DIR") or root / "logs")
+    if any(d.glob("meters-*.csv")):
+        return d
+    base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) if sys.platform.startswith("win") \
+        else Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    return base / "AutoLoud"
 
 
 def titles_from_log(path: Path, app: str, day: str, t_end: pd.Timestamp, min_s: float = 3.0):
@@ -117,6 +121,7 @@ def main() -> int:
     ap.add_argument("--csv-dir", help="folder with the logs (default: logs folder)")
     ap.add_argument("--titles", default="chrome.exe", help="app whose window titles go under the axis")
     ap.add_argument("--out", help="output PNG (default: volume-<run>.png in the current folder)")
+    ap.add_argument("--list", action="store_true", help="list the runs in the logs folder and exit")
     a = ap.parse_args()
     _cjk_font()
 
@@ -124,6 +129,17 @@ def main() -> int:
     runs = sorted(p.name[len("volume-"):-4] for p in folder.glob("volume-*.csv"))
     if not runs:
         print("no volume-*.csv in", folder); return 1
+    if a.list:
+        print(f"runs in {folder} (newest last):")
+        for r in runs:
+            v = folder / f"volume-{r}.csv"
+            n = max(0, sum(1 for _ in v.open(encoding="utf-8")) - 1)
+            m = folder / f"meters-{r}.csv"
+            import time as _t
+            start = _t.mktime(_t.strptime(r[:15], "%Y%m%d-%H%M%S"))
+            mins = (m.stat().st_mtime - start) / 60 if m.exists() else 0
+            print(f"  {r:32s}  {n:4d} user moves   {max(mins, 0):5.0f} min")
+        return 0
     run = a.run or runs[-1]
     vol = pd.read_csv(folder / f"volume-{run}.csv", parse_dates=["time"]).sort_values("time")
     met = pd.read_csv(folder / f"meters-{run}.csv", parse_dates=["time"],

@@ -22,6 +22,7 @@ writes <app>-<ts>.png into the current folder, three panels over the same time a
 from __future__ import annotations
 
 import argparse
+import os
 import math
 import sys
 from pathlib import Path
@@ -34,10 +35,13 @@ import matplotlib.pyplot as plt
 
 def config_dir() -> Path:
     """The logs folder (logs/ next to the program; older runs may be in the config folder)."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from autoloud.core.profiles import config_dir as _cd, log_dir
-    d = log_dir()
-    return d if any(d.glob("meters-*.csv")) else _cd()
+    root = Path(__file__).resolve().parents[1]
+    d = Path(os.environ.get("AUTOLOUD_LOG_DIR") or root / "logs")
+    if any(d.glob("meters-*.csv")):
+        return d
+    base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) if sys.platform.startswith("win") \
+        else Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    return base / "AutoLoud"
 
 
 def main() -> int:
