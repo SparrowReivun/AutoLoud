@@ -144,9 +144,14 @@ def main() -> int:
     mode_segs = [(modes["time"][i], modes["time"][i + 1] if i + 1 < len(modes) else t1, modes["mode"][i])
                  for i in range(len(modes))]
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(22, 11), dpi=150, sharex=True,
-                                   gridspec_kw={"height_ratios": [3, 2], "hspace": 0.08})
-    for ax in (ax1, ax2):
+    has_auto = any(m != "monitor" for _, _, m in mode_segs)
+    if has_auto:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(22, 11), dpi=150, sharex=True,
+                                       gridspec_kw={"height_ratios": [3, 2], "hspace": 0.08})
+    else:                                   # monitor only all through: nothing automatic to draw
+        fig, ax1 = plt.subplots(1, 1, figsize=(22, 8), dpi=150)
+        ax2 = ax1
+    for ax in {ax1, ax2}:
         for s, e, mode in mode_segs:
             if mode != "monitor":
                 ax.axvspan(s, e, color="#ffe6a8", alpha=0.55, lw=0, zorder=0)
@@ -185,16 +190,21 @@ def main() -> int:
 
     # ---- panel 2: AutoLoud's automatic gain --------------------------------------------------
     gain = met["gain_total_db"].where(in_auto)
-    tgt = met["target_lufs"].where(in_auto) if "target_lufs" in met else None
-    glo, ghi = tight_ylim(gain, 1.0, 99.5)
-    ax2.plot(met["time"], gain.clip(lower=glo), color="#7b3fa0", lw=1.3, label="AutoLoud 自动总增益（dB）")
-    mark_clipped(ax2, met["time"], gain, glo, colour="#7b3fa0")
-    if (~in_auto).any():
-        ax2.text(0.99, 0.95, "仅监测时段：AutoLoud 不动任何音量，故无增益曲线", transform=ax2.transAxes,
-                 ha="right", va="top", fontsize=8.5, color="grey")
-    ax2.set_ylim(glo, ghi)
-    ax2.set_ylabel("自动增益 (dB)")
-    if tgt is not None and tgt.notna().any():
+    if not has_auto:
+        gain = None
+    tgt = met["target_lufs"].where(in_auto) if ("target_lufs" in met and has_auto) else None
+    if has_auto:
+        glo, ghi = tight_ylim(gain, 1.0, 99.5)
+        ax2.plot(met["time"], gain.clip(lower=glo), color="#7b3fa0", lw=1.3, label="AutoLoud 自动总增益（dB）")
+        mark_clipped(ax2, met["time"], gain, glo, colour="#7b3fa0")
+        if (~in_auto).any():
+            ax2.text(0.99, 0.95, "仅监测时段：AutoLoud 不动任何音量，故无增益曲线", transform=ax2.transAxes,
+                     ha="right", va="top", fontsize=8.5, color="grey")
+        ax2.set_ylim(glo, ghi)
+        ax2.set_ylabel("自动增益 (dB)")
+    if not has_auto:
+        pass
+    elif tgt is not None and tgt.notna().any():
         axt = ax2.twinx()
         axt.plot(met["time"], tgt, color="#2ca02c", lw=1.0, ls="--", label="目标 T（LUFS，右轴）")
         axt.set_ylim(*tight_ylim(tgt, 1.0, 99.0))
@@ -224,7 +234,7 @@ def main() -> int:
     if segs:
         ax2.text(0.0, -0.045, f"{a.titles} 标题 →", transform=ax2.transAxes, ha="right", va="top", fontsize=7.5, color="grey")
 
-    fig.subplots_adjust(bottom=0.3, top=0.95, left=0.05, right=0.96)
+    fig.subplots_adjust(bottom=0.3 if has_auto else 0.4, top=0.95, left=0.05, right=0.96)
     out = Path(a.out) if a.out else Path.cwd() / f"volume-{run}.png"
     fig.savefig(out)
     print("wrote", out, "|", n_user, "user moves |", len(segs), "title segments")
