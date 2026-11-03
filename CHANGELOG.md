@@ -1,18 +1,20 @@
 # Changelog
 
-## 0.4.1 — 2026-11-02
+## 0.4.2 — 2026-11-03
 
-- 修复「调低 P 之后源响度经常读不到」：回录测的是会话音量之后的混音，总增益压到 −50 dB 时正常内容在回录里只有 −90 LUFS，低于 BS.1770 的 −70 绝对门限，被当成静音——源响度为空、目标 T 回退到 P、平台不再学习、听音块测不到也就升不回去，静音 15 s 后还会误判作品结束。现在门限跟着回录里已包含的增益下移（最低 −105 LUFS），这些读数照常计入。
-- 日志搬到程序旁边的 `logs\` 文件夹（不可写时退回 `%APPDATA%\AutoLoud`）；每次在首页切换模式都新开一组 adjust / meters / apps / volume 文件，文件名带模式英文标签（`-monitor` / `-default` / `-strong` / `-strong1`），一个文件就是一种实验条件。
-- 仅监测模式下不再运行增益控制器：之前它仍在后台「空算」，adjust 日志和 meters.csv 里出现了并未施加的增益决策，而且关闭仅监测时会直接套用这个陈旧的增益。现在仅监测时段的日志只有用户自己的操作，退出仅监测从头开始起步。
-- 新增 `tools/plot_volume.py`：一次运行里用户的全部音量操作（仅监测 / 自动预设分色）与 AutoLoud 的自动增益、目标 T 画在同一时间轴上，横轴下方标出当时 Chrome 的标签页标题。
-
+- Fix: source loudness often unreadable after lowering P (until a replay or a seek). The loopback measures the mix after the session volumes, so under a deep cut (−50 dB) ordinary content sits at −90 LUFS, below BS.1770's −70 absolute gate, and counted as silence: no source loudness, T fell back to P, platforms stopped learning, no block could be measured so the gain could never climb back, and 15 s of such 'silence' ended the work. The gate now follows the gain the loopback already contains (floored at −105 LUFS).
+- Logs moved to a `logs\` folder next to the program (falls back to `%APPDATA%\AutoLoud` when that is not writable). Every mode switch on the dashboard starts a fresh set of adjust / meters / apps / volume files, tagged with the mode in the name (`-monitor` / `-default` / `-strong` / `-strong1`), so one file is one experimental condition.
+- Monitor-only no longer runs the gain controller: it kept computing in the background, so the adjust log and meters.csv showed decisions that were never applied, and leaving monitor-only applied that stale gain at once. Monitor-only logs now contain only the user's own moves; leaving it starts the controller afresh.
+- New `tools/plot_volume.py`: every volume move the user made in a run (monitor-only / automatic preset in different colours) and AutoLoud's own automatic gain and target T on one time axis, with Chrome's tab titles under the axis.
 - Quiet intros no longer get boosted into an overload: in 强力1, a source more than 6 LU under the app's own quiet platform (a fade-in, an intro, a loading screen) is never raised - the gain waits for the content (setting "intro / fade: never raised"). Seen 07:25: an intro at −44 under a −31 platform was raised +9 dB, then the song body hit the protection.
 - A new work now starts in the steady state (setting, on): whether it is too loud or too quiet is decided by the steady block counts, not by the first block alone; the first cut still goes all the way.
 - Built-in 强力1 follows the author's tuning (steady: 1 loud block over T + 4, 6 quiet blocks under T − 6; protection T + 16; X = 13).
 - In monitor-only mode the dashboard's comfort slider becomes a plain Windows master volume control (0-100 %), and the volume keys / knob move the master as Windows normally would; leaving the mode parks the master again and resumes control.
 - `volume-<ts>.csv`: one row per volume action the user takes (volume keys / knob, a press Windows handled behind the hook, the P slider, a mixer fader, and - in monitor-only mode - every move of the Windows master), with the mode in force; for counting how often the user still reaches for the volume with and without AutoLoud. In monitor-only mode the keys are left to Windows and the master is not re-parked, so the user's own moves are what gets counted.
 - Dashboard mode box has a "Monitor only (no adjustment)" entry: every session goes back to 100 % and no volume is touched (bus, faders, protection, strong pulls) while measuring, learning and the dashboard keep running; settings, faders, presets and remembered gains are left exactly as they are. Remembered on restart.
+
+## 0.4.1 — 2026-11-02
+
 - Dashboard tiles are now: total gain, source loudness (short-term 3 s of the sole sounding app), the loudest app's learned platforms C_low / C_high, target T (with u in 强力1). Session gain and master boost are gone from the tiles (the master no longer moves).
 - Built-in presets follow the author's current tuning (强力1: protection T + 16.5, X = 10 LU, 10 s silence); a fresh config starts in 强力1; key step 0.4 dB.
 - Dashboard meters and the P slider now run from −90 to 0 LUFS (were −60); the slider's bottom (−90) is mute.
