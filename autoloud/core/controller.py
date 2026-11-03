@@ -81,6 +81,8 @@ class ControllerParams:
     source_range_db: float = 5.0         # X: the target may sink this far below B for the app's quiet platform
     source_hold_s: float = 60.0          # no attributable source reading for this long -> T falls back to B
     cut_pulls_fader: bool = False        # every protection cut the sole app trips pulls its fader down by the excess over B - 5, for good
+    intro_below_platform_db: float = 6.0 # source mode: a source this far under the app's quiet platform is an intro / fade: never raised (0 = off)
+    new_work_steady: bool = True         # a new work starts in the steady state: it is re-adjusted only after the steady block counts
 
 
 @dataclass
@@ -149,6 +151,8 @@ class GainController:
         self._u_live: float | None = None   # latest attributable position (None = not measurable right now)
         self._u_t: float = -1e9             # when _u_live was last measurable
         self._u_info: tuple[float, float, float] | None = None   # (src, lo, hi) behind _u_live, for the log
+        self._src_live: float | None = None
+        self._lo_live: float | None = None
         self.steps_taken = 0
         self.events: deque[tuple[int, float, str, dict]] = deque(maxlen=12)   # (seq, now, kind, data)
         self._seq = 0
@@ -198,6 +202,8 @@ class GainController:
         """Feed the sole sounding app's own loudness (every gain taken out)
         and its two learned platforms. Called every session poll; None when
         no single app is attributable or the platforms are not ready."""
+        self._src_live = src_lufs           # (for the intro rule: also when the platforms are not ready)
+        self._lo_live = lo if (lo is not None and hi is not None and hi - lo >= 1.0) else None
         if src_lufs is None or lo is None or hi is None or hi - lo < 1.0:
             self._u_live = None
             return
@@ -254,9 +260,22 @@ class GainController:
         else:
             self._ramp.retarget(now, self._clamp(self._ramp.value(now) + self.params.first_time_offset_db), self.params.move_ramp_s)
             self._log(now, "new_work", mode="first", gain=self._ramp.end_db)
-        self.phase = Phase.ADJUST
+        # start steady (the remembered gain was right for this app last time): the steady
+        # block counts decide whether it is too loud / too quiet, not the first block alone
+        self.phase = Phase.STEADY if self.params.new_work_steady else Phase.ADJUST
+        self._over_blocks = self._under_blocks = 0
         self._up_streak, self._fresh = 0, True
         self._arm_block(now + self.params.move_ramp_s, meter)
+
+    def _intro_hold(self) -> bool:
+        """Source mode: the sole app is far under its own quiet platform - an intro,
+        a fade, a loading screen. Its loudness is not content to be raised."""
+        p = self.params
+        if p.target_mode != "source" or p.intro_below_platform_db <= 0:
+            return False
+        if self._src_live is None or self._lo_live is None:
+            return False
+        return self._src_live < self._lo_live - p.intro_below_platform_db
 
     def shift_target(self, delta_db: float, now: float, meter=None) -> None:
         """The user moved the comfort level B (dashboard slider).
@@ -459,7 +478,7 @@ class GainController:
                     self._over_blocks = self._under_blocks = 0
                 else:
                     over = block > tl + p.steady_trigger_db
-                    under = block < tl + p.steady_under_db
+                    under = block < tl + p.steady_under_db and not self._intro_hold()
                     self._over_blocks = self._over_blocks + 1 if over else 0
                     self._under_blocks = self._under_blocks + 1 if under else 0
                 if block is not None and (self._over_blocks >= p.steady_over_blocks
@@ -518,6 +537,10 @@ class GainController:
             self._arm_block(now, getattr(self, "_meter", None))
             return
         g = self._ramp.end_db
+        if error > 0 and self._intro_hold():
+            self._log(now, "intro_hold", block=block, rel=-error, src=self._src_live, lo=self._lo_live, gain=g)
+            self._arm_block(now, getattr(self, "_meter", None))
+            return
         if abs(error) <= p.snap_db:
             # close to B: finish in one exact step instead of creeping around it
             self._up_streak = 0

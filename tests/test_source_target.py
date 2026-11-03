@@ -79,7 +79,7 @@ def test_migration_adds_the_source_preset_and_moves_strong_ticks_to_a_preset():
     cfg.migrate_presets(1, ["Weixin.exe"])
     assert cfg.SOURCE_PRESET in cfg.presets
     sp = cfg.presets[cfg.SOURCE_PRESET]
-    assert sp["target_mode"] == "source" and sp["source_range_db"] == 10.0
+    assert sp["target_mode"] == "source" and sp["source_range_db"] == 13.0
     assert sp["deadband_up_db"] == 3.0 and sp["deadband_down_db"] == 3.0 and sp["steady_under_db"] == -6.0
     assert cfg.presets[cfg.STRONG_PRESET]["cut_pulls_fader"] is True
     assert cfg.apps["Weixin.exe"].preset == cfg.STRONG_PRESET
@@ -113,3 +113,24 @@ def test_sole_app_preset_drives_the_bus_and_source_is_fed():
         assert eng.state.mode_name == cfg.active_preset
     finally:
         eng.stop()
+
+
+def test_intro_far_under_the_quiet_platform_is_not_raised():
+    from autoloud.core.controller import Phase
+    c = GainController(Targets(b_lufs=-25.0),
+                       ControllerParams(target_mode="source", source_range_db=10.0, intro_below_platform_db=6.0,
+                                        listen_s=2.0, new_work_steady=False))
+    c.phase = Phase.ADJUST; c._ramp.retarget(0.0, -10.0, 0.0); c._last_signal_t = 0.0
+    c.set_source(0.0, -44.0, -31.0, -20.0)          # 13 LU under the quiet platform: an intro
+    assert c._intro_hold()
+    c.set_source(0.0, -30.0, -31.0, -20.0)          # on the platform: normal content
+    assert not c._intro_hold()
+
+
+def test_new_work_starts_steady_when_configured():
+    from autoloud.core.controller import Phase
+    for flag, want in ((True, Phase.STEADY), (False, Phase.ADJUST)):
+        c = GainController(Targets(b_lufs=-25.0), ControllerParams(new_work_steady=flag))
+        c.phase = Phase.STEADY; c._last_signal_t = 0.0
+        c.notify_new_work(1.0, None, -12.0)
+        assert c.phase == want and abs(c.gain_db + 12.0) < 1e-6

@@ -194,9 +194,9 @@ class AppConfig:
         "强力": dict(onset_below_b_db=7.0, step_up_db=2.0, deadband_down_db=6.0, steady_trigger_db=4.0,
                    steady_under_db=-15.0, safety_margin_db=12.0, safety_land_db=5.0, move_ramp_s=0.2),
         "强力1": dict(onset_below_b_db=7.0, step_up_db=2.0, deadband_up_db=3.0, deadband_down_db=3.0,
-                    steady_trigger_db=5.0, steady_over_blocks=2, steady_under_db=-6.0, steady_under_blocks=4,
-                    safety_margin_db=16.5, safety_land_db=4.0, move_ramp_s=0.4, work_silence_s=10.0,
-                    target_mode="source", source_range_db=10.0, source_hold_s=60.0),
+                    steady_trigger_db=4.0, steady_over_blocks=1, steady_under_db=-6.0, steady_under_blocks=6,
+                    safety_margin_db=16.0, safety_land_db=4.0, move_ramp_s=0.4, work_silence_s=10.0,
+                    target_mode="source", source_range_db=13.0, source_hold_s=60.0),
     }
 
     @classmethod

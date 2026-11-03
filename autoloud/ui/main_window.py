@@ -547,6 +547,7 @@ class SettingsPage(QWidget):
             ("work_silence_s", "set.worksilence", 3, 120, 1),
             ("source_range_db", "set.source_range", 0, 20, 0.5),
             ("source_hold_s", "set.source_hold", 5, 600, 5),
+            ("intro_below_platform_db", "set.intro_below", 0, 30, 1),
         ]:
             sp = QDoubleSpinBox(); sp.setRange(lo, hi); sp.setSingleStep(step); sp.setValue(getattr(P, key))
             form.addRow(t(label), sp)
@@ -560,9 +561,12 @@ class SettingsPage(QWidget):
         form.insertRow(form.rowCount() - 2, t("set.target_mode"), self.target_mode)
         self.cut_pulls = QCheckBox()
         form.addRow(t("set.cut_pulls_fader"), self.cut_pulls)
+        self.nw_steady = QCheckBox()
+        form.addRow(t("set.new_work_steady"), self.nw_steady)
         self._reload_spins()
         self.target_mode.currentIndexChanged.connect(self._changed)
         self.cut_pulls.toggled.connect(self._changed)
+        self.nw_steady.toggled.connect(self._changed)
         self.music_dir = QLineEdit(cfg.music_dir)
         browse = QPushButton(t("set.browse"))
         browse.clicked.connect(self._browse)
@@ -624,6 +628,7 @@ class SettingsPage(QWidget):
             self.target_mode.setCurrentIndex(max(0, self.target_mode.findData(P.target_mode)))
             self.target_mode.blockSignals(False)
             self.cut_pulls.blockSignals(True); self.cut_pulls.setChecked(bool(P.cut_pulls_fader)); self.cut_pulls.blockSignals(False)
+            self.nw_steady.blockSignals(True); self.nw_steady.setChecked(bool(P.new_work_steady)); self.nw_steady.blockSignals(False)
 
     # ---- presets ------------------------------------------------------------
     def _fill_presets(self):
@@ -690,6 +695,7 @@ class SettingsPage(QWidget):
             setattr(cfg.params, k, int(round(sp.value())) if is_int else float(sp.value()))
         cfg.params.target_mode = self.target_mode.currentData() or "fixed"
         cfg.params.cut_pulls_fader = self.cut_pulls.isChecked()
+        cfg.params.new_work_steady = self.nw_steady.isChecked()
         cfg.music_dir = self.music_dir.text()
         cfg.start_minimized = self.minimized.isChecked()
         cfg.volume_keys = self.volkeys.isChecked()
