@@ -121,11 +121,11 @@ class DashboardPage(QWidget):
         lay.addWidget(meters)
 
         grid = QHBoxLayout()
-        self.k_src = self._kpi(grid, t("kpi.source"))
         self.k_total = self._kpi(grid, t("gain.total"))
-        self.k_p = self._kpi(grid, t("kpi.p"))
+        self.k_src = self._kpi(grid, t("kpi.source"))
+        self.k_plat = self._kpi(grid, t("kpi.platforms"))
         self.k_target = self._kpi(grid, t("kpi.target"))
-        self.k_src.setToolTip(t("meter.source.hint"))
+        self.k_src.setToolTip(t("meter.source.hint")); self.k_plat.setToolTip(t("apps.platforms.tip"))
         lay.addLayout(grid)
 
         act = Card()
@@ -299,7 +299,15 @@ class DashboardPage(QWidget):
             sole_s, _sm_s, ss_s = self.engine.source_loudness(s.sessions, r, c)
             self.k_src.setText(f"{ss_s:.1f}" if ss_s is not None else "—")
             self.k_src.setToolTip(t("meter.source.hint") + ("\n" + self.engine.config.display_name(sole_s) if sole_s else ""))
-            self.k_p.setText(t("dash.b.mute") if p is not None and p.b_lufs <= -89.95 else (f"{p.b_lufs:.1f}" if p else "—"))
+            snd = self.engine._sounding(s.sessions)
+            if snd:
+                loudest = max(snd, key=lambda x: x.peak)
+                pm = self.engine.platform_for(loudest.name)
+                lo, hi = pm.platforms
+                self.k_plat.setText(f"{lo:.0f} / {hi:.0f}" if pm.ready else t("apps.platforms.none"))
+                self.k_plat.setToolTip(t("apps.platforms.tip") + "\n" + self.engine.config.display_name(loudest.name))
+            else:
+                self.k_plat.setText("—")
             self.k_target.setText(f"{c.target_lufs:.1f}")
             ctl = self.engine.controller
             if ctl is not None and ctl.params.target_mode == "source":
@@ -318,7 +326,7 @@ class DashboardPage(QWidget):
                    Phase.STEADY: "status.steady", Phase.SAFETY: "status.safety"}[c.phase]
         else:
             key = "status.calibrating" if s.calibrating else "status.disabled"
-            for k in (self.k_total, self.k_src, self.k_p, self.k_target):
+            for k in (self.k_total, self.k_src, self.k_plat, self.k_target):
                 k.setText("—")
             for m in (self.m_mom, self.m_st, self.m_int):
                 m.set_marker("T", None)

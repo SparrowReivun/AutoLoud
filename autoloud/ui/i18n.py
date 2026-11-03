@@ -105,7 +105,7 @@ _T = {
     "meter.integrated": ("窗口积分", "Window integrated"),
     "meter.target": ("目标", "Target"),
     "kpi.source": ("源响度 · 短时 3 s (LUFS)", "Source loudness · 3 s (LUFS)"),
-    "kpi.p": ("舒适响度 P (LUFS)", "Comfort level P (LUFS)"),
+    "kpi.platforms": ("最响应用的平台 C_low / C_high (LUFS)", "Loudest app's platforms C_low / C_high (LUFS)"),
     "kpi.target": ("目标响度 T (LUFS)", "Target loudness T (LUFS)"),
     "meter.raw": ("回录实测", "Loopback as measured"),
     "meter.source": ("源响度", "Source loudness"),
