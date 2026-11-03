@@ -209,18 +209,32 @@ class DashboardPage(QWidget):
         cfg.ensure_presets()
         self.mode_box.blockSignals(True)
         self.mode_box.clear()
+        self.mode_box.addItem(t("dash.mode.off"), self.MODE_OFF)
         for name in cfg.presets:
-            self.mode_box.addItem(name)
-        self.mode_box.setCurrentText(cfg.active_preset)
+            self.mode_box.addItem(name, name)
+        self.mode_box.setCurrentIndex(0 if cfg.monitor_only else max(0, self.mode_box.findData(cfg.active_preset)))
         self.mode_box.blockSignals(False)
+
+    MODE_OFF = "__monitor__"
+
+    def _mode_box_wanted(self) -> str:
+        cfg = self.engine.config
+        return self.MODE_OFF if cfg.monitor_only else cfg.active_preset
 
     def _mode_changed(self, name: str):
         cfg = self.engine.config
-        if not name or name == cfg.active_preset:
+        data = self.mode_box.currentData()
+        if data == self.MODE_OFF:
+            self.engine.set_monitor_only(True)
+            cfg.save()
             return
-        cfg.switch_preset(name)
-        self.engine.apply_params()
-        self.engine._event("mode", name=name)
+        if not data:
+            return
+        self.engine.set_monitor_only(False)
+        if data != cfg.active_preset:
+            cfg.switch_preset(data)
+            self.engine.apply_params()
+            self.engine._event("mode", name=data)
         cfg.save()
 
     def _b_changed(self, v):
@@ -330,10 +344,10 @@ class DashboardPage(QWidget):
                 k.setText("—")
             for m in (self.m_mom, self.m_st, self.m_int):
                 m.set_marker("T", None)
-        self.status.setText(t(key))
+        self.status.setText(t("status.monitor") if self.engine.config.monitor_only else t(key))
         self._update_activity(s)
-        if self.mode_box.currentText() != self.engine.config.active_preset or \
-                self.mode_box.count() != len(self.engine.config.presets):
+        if self.mode_box.currentData() != self._mode_box_wanted() or \
+                self.mode_box.count() != len(self.engine.config.presets) + 1:
             self._fill_modes()
         cfgv = self.engine.config
         note = t("dash.volkeys.note").format(pct=cfgv.startup_master_percent) if cfgv.volume_keys else ""

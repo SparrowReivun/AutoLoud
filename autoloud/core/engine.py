@@ -331,7 +331,7 @@ class Engine:
                             self.controller.notify_new_work(now, self.meter, mix.last_gain_db)
                     # remember the bus gain every sounding auto app has (latest value wins, so a
                     # work that ends before settling still leaves its best estimate)
-                    clean = (self._last_cmd is not None and self.config.enabled and (
+                    clean = (self._last_cmd is not None and self.config.enabled and not self.config.monitor_only and (
                         self._last_cmd.phase.value == "steady" or
                         (self._last_cmd.phase.value == "adjust" and now - self._last_safety_t > 20.0)))
                     if clean:                      # never a gain still bent by a protection cut
@@ -547,6 +547,8 @@ class Engine:
         down by the same amount (until it stops sounding; permanently if it is
         in strong mode). Otherwise (the playing content itself got loud) the
         bus cut stands, and a strong-mode app is still pulled down."""
+        if self.config.monitor_only:
+            return                      # nothing is moved, so nothing is attributed or pulled
         snd = self._sounding(sessions)
         new = [s for s in snd if now - self._sound_since.get(s.name, -1e9) < 1.2]
         old = [s for s in snd if s.name not in {n.name for n in new}]
@@ -582,6 +584,20 @@ class Engine:
         log.info("strong mode: %s still %.1f dB over B-%g -> fader %+.1f dB", s.name, excess, self.STRONG_HEADROOM_DB, mix.offset_db)
         self._event("strong_cut", app=self.config.display_name(s.name), excess=excess, off=mix.offset_db)
         self.mixer_changed()
+
+    def set_monitor_only(self, on: bool) -> None:
+        """Dashboard mode "monitor only": keep measuring, learning and showing,
+        but put every session back to 100 % and touch no volume until it is
+        switched off again. Settings, faders and presets are left untouched."""
+        if self.config.monitor_only == on:
+            return
+        self.config.monitor_only = on
+        if on:
+            self._restore_volumes()               # neutral volumes while we only watch
+        else:
+            self._applied_session_db.clear(); self._applied_master_db = None   # re-apply on the next tick
+        self._event("monitor_on" if on else "monitor_off")
+        self._dirty = True
 
     def set_app_preset(self, app_name: str, preset: str) -> None:
         """Mixer drop-down: the parameter preset the bus runs with while this
@@ -804,6 +820,8 @@ class Engine:
         """
         if not self._running:
             return          # stopping: a tick still in flight must not touch the volumes again
+        if self.config.monitor_only:
+            return          # monitor only: everything is measured and shown, nothing is moved
         G = cmd.total_db if cmd is not None else 0.0
         cfg = self.config
         # B slider at its very bottom = mute every app that follows the bus

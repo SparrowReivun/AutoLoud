@@ -91,6 +91,7 @@ class AppConfig:
     active_preset: str = ""
     volume_keys: bool = True      # volume keys / knob adjust B instead of the Windows master volume
     sync_default_device: bool = True   # picking a device on the dashboard also makes it the Windows default output
+    monitor_only: bool = False         # dashboard "monitor only": measure and show everything, touch no volume
     exit_master_percent: float = 1.0   # master volume to leave on exit / crash (-1 = what it was before start-up; unreliable, off by default)
     master_before_percent: float = -1.0   # the master level found at start-up (persisted so a crash does not lose it)
     volume_key_step_db: float = 0.4
@@ -120,6 +121,7 @@ class AppConfig:
             cfg.start_minimized = raw.get("start_minimized", False)
             cfg.volume_keys = bool(raw.get("volume_keys", True))
             cfg.sync_default_device = bool(raw.get("sync_default_device", True))
+            cfg.monitor_only = bool(raw.get("monitor_only", False))
             cfg.exit_master_percent = float(raw.get("exit_master_percent", 1.0))
             if int(raw.get("presets_version", 1)) < 7 and cfg.exit_master_percent < 0:
                 cfg.exit_master_percent = 1.0               # exit level: 1 % by default (restore-before dropped)
@@ -167,6 +169,7 @@ class AppConfig:
             "start_minimized": self.start_minimized,
             "volume_keys": self.volume_keys,
             "sync_default_device": self.sync_default_device,
+            "monitor_only": self.monitor_only,
             "exit_master_percent": self.exit_master_percent,
             "master_before_percent": self.master_before_percent,
             "sidebar_collapsed": self.sidebar_collapsed,

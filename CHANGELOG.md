@@ -5,6 +5,7 @@
 - Quiet intros no longer get boosted into an overload: in 强力1, a source more than 6 LU under the app's own quiet platform (a fade-in, an intro, a loading screen) is never raised - the gain waits for the content (setting "intro / fade: never raised"). Seen 07:25: an intro at −44 under a −31 platform was raised +9 dB, then the song body hit the protection.
 - A new work now starts in the steady state (setting, on): whether it is too loud or too quiet is decided by the steady block counts, not by the first block alone; the first cut still goes all the way.
 - Built-in 强力1 follows the author's tuning (steady: 1 loud block over T + 4, 6 quiet blocks under T − 6; protection T + 16; X = 13).
+- Dashboard mode box has a "Monitor only (no adjustment)" entry: every session goes back to 100 % and no volume is touched (bus, faders, protection, strong pulls) while measuring, learning and the dashboard keep running; settings, faders, presets and remembered gains are left exactly as they are. Remembered on restart.
 - Dashboard tiles are now: total gain, source loudness (short-term 3 s of the sole sounding app), the loudest app's learned platforms C_low / C_high, target T (with u in 强力1). Session gain and master boost are gone from the tiles (the master no longer moves).
 - Built-in presets follow the author's current tuning (强力1: protection T + 16.5, X = 10 LU, 10 s silence); a fresh config starts in 强力1; key step 0.4 dB.
 - Dashboard meters and the P slider now run from −90 to 0 LUFS (were −60); the slider's bottom (−90) is mute.
