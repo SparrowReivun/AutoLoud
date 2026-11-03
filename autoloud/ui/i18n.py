@@ -39,6 +39,7 @@ _T = {
     "ev.master_slider": ("仅监测：系统音量滑块 → {pct:.0f}%", "Monitor only: system volume slider → {pct:.0f} %"),
     "dash.mode.off": ("仅监测（不调整）", "Monitor only (no adjustment)"),
     "status.monitor": ("仅监测：测量照常，不动任何音量", "Monitor only: measuring, touching no volume"),
+    "ev.work_behind": ("{app} 换了作品，但 {loud} 才是主声：总线增益不动", "{app} changed work behind {loud}, which dominates the mix: bus gain left alone"),
     "ev.logs_rotated": ("切换了模式：新开一组日志文件（…-{mode}）", "Mode changed: a fresh set of log files (…-{mode})"),
     "ev.monitor_on": ("仅监测：所有会话放回 100%，之后不再调整任何音量（设置、推子、预设都保留）", "Monitor only: every session back to 100 %, no volume is touched from now on (settings, faders and presets are kept)"),
     "ev.monitor_off": ("恢复自动调整", "Automatic adjustment resumed"),

@@ -345,7 +345,7 @@ class DashboardPage(QWidget):
             self.k_src.setToolTip(t("meter.source.hint") + ("\n" + self.engine.config.display_name(sole_s) if sole_s else ""))
             snd = self.engine._sounding(s.sessions)
             if snd:
-                loudest = max(snd, key=lambda x: x.peak)
+                loudest = max(snd, key=lambda x: x.peak * x.volume)
                 pm = self.engine.platform_for(loudest.name)
                 lo, hi = pm.platforms
                 self.k_plat.setText(f"{lo:.0f} / {hi:.0f}" if pm.ready else t("apps.platforms.none"))

@@ -333,6 +333,13 @@ class Engine:
                         if app_name not in snd_now:
                             self._event("work_silent", app=self.config.display_name(app_name))
                             continue
+                        # ... and only the app that dominates the mix: a notification blip in a
+                        # chat app behind the music must not re-target the bus to that app's gain
+                        dom = self._dominant(sessions)
+                        if dom is not None and dom.name != app_name:
+                            self._event("work_behind", app=self.config.display_name(app_name),
+                                        loud=self.config.display_name(dom.name))
+                            continue
                         if self.controller is not None and self.config.enabled and self._follows_bus(app_name):
                             mix = self.config.mix_for(app_name)
                             self.controller.notify_new_work(now, self.meter, mix.last_gain_db)
@@ -390,10 +397,10 @@ class Engine:
                     activity = self.controller.activity(now)
                     self._drain_controller_events(now)
                 if self.meter_log is not None:
-                    snd = self._sounding(sessions)
+                    dom = self._dominant(sessions)
                     self.meter_log.meters(r, cmd, self.profile.b_lufs if self.profile else 0.0,
                                           getattr(self, "_last_master_db", 0.0), now,
-                                          snd[0].name if len(snd) == 1 else "")
+                                          dom.name if dom is not None else "")
                 self._set_state(reading=r, command=cmd, calibrating=self._calibrating,
                                 enabled=self.config.enabled, activity=activity,
                                 events=list(self._events), error="",
@@ -540,6 +547,27 @@ class Engine:
         return [s for s in sessions if s.active and not s.is_self and s.peak > 0.01
                 and s.name not in self.SYSTEM_APPS]
 
+    DOMINANT_RATIO = 0.3     # others must stay ~10 dB under the loudest (after session volumes) to be ignored
+                             # (a -10 dB second source moves the mix loudness by < 0.5 dB)
+
+    def _dominant(self, sessions: list[AudioSession]) -> AudioSession | None:
+        """The one app that is effectively alone in the loopback: the loudest
+        sounding app by peak x session volume (what reaches the mix), when
+        every other sounding app is at least ~10 dB under it there. An idle
+        session hovering at the peak threshold (OBS monitoring, a chat app's
+        hiss) must not break single-app attribution; a real second voice does."""
+        snd = self._sounding(sessions)
+        if not snd:
+            return None
+        eff = [(s.peak * max(s.volume, 0.0), s) for s in snd]
+        eff.sort(key=lambda x: x[0], reverse=True)
+        top, best = eff[0]
+        if top <= 0.0:
+            return None
+        if any(e > top * self.DOMINANT_RATIO for e, _ in eff[1:]):
+            return None
+        return best
+
     def source_loudness(self, sessions: list[AudioSession], r, cmd: GainCommand | None
                         ) -> tuple[str, float | None, float | None]:
         """The loudness of the one app that is sounding, with every gain taken
@@ -547,10 +575,9 @@ class Engine:
         100 % session volume and the reference master. The loopback measures
         the whole mix after the session volumes, so this is exact only when
         exactly one app sounds; otherwise ("", None, None)."""
-        snd = self._sounding(sessions)
-        if len(snd) != 1 or cmd is None or r.short_term <= r.gate_lufs:
+        s = self._dominant(sessions)
+        if s is None or cmd is None or r.short_term <= r.gate_lufs:
             return "", None, None
-        s = snd[0]
         vol_db = 20.0 * math.log10(max(s.volume, 1e-6))
         # loopback = source + session volume (+ master, only if the master is in the loopback)
         seen_master = cmd.master_offset_db if (self.profile is not None and
@@ -563,10 +590,9 @@ class Engine:
         """When exactly one app is sounding, what we hear is that app alone:
         remember the loudest it has been *at 0 dB gain* (bus gain and its own
         fader taken out), so strong mode can size its fader from history."""
-        snd = self._sounding(sessions)
-        if len(snd) != 1 or cmd.perceived_lufs <= -90:
+        s = self._dominant(sessions)
+        if s is None or cmd.perceived_lufs <= -90:
             return
-        s = snd[0]
         mix = self.config.mix_for(s.name)
         src = cmd.perceived_lufs - cmd.total_db - mix.offset_db
         if mix.peak_src_lufs is None or src > mix.peak_src_lufs + 0.1:
@@ -698,17 +724,17 @@ class Engine:
         if self.controller is not None:
             self.controller.set_source(now, ss if sole else None, lo, hi)
         # the sole app's own preset drives the bus while it sounds alone
-        snd = self._sounding(sessions)
+        dom = self._dominant(sessions)
         want = ""
-        if len(snd) == 1:
-            mix = self.config.apps.get(snd[0].name)
+        if dom is not None:
+            mix = self.config.apps.get(dom.name)
             if mix is not None and mix.preset in self.config.presets and mix.preset != self.config.active_preset:
                 want = mix.preset
         if want != self._param_override:
             self._param_override = want
             self.apply_params()
             self._event("mode_app", name=want or self.config.active_preset,
-                        app=self.config.display_name(snd[0].name) if snd else "")
+                        app=self.config.display_name(dom.name) if dom is not None else "")
 
     def _boost_cap_db(self) -> float:
         """How far the master volume can really be raised above the calibration

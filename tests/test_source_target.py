@@ -134,3 +134,19 @@ def test_new_work_starts_steady_when_configured():
         c.phase = Phase.STEADY; c._last_signal_t = 0.0
         c.notify_new_work(1.0, None, -12.0)
         assert c.phase == want and abs(c.gain_db + 12.0) < 1e-6
+
+
+def test_dominant_app_ignores_an_idle_session_well_under_it_in_the_mix():
+    from autoloud.backends.base import AudioSession
+    from autoloud.backends.mock import MockBackend
+    from autoloud.core.engine import Engine
+    eng = Engine(MockBackend(), AppConfig())
+    S = lambda n, peak, vol: AudioSession(key=f"1:{n}", name=n, pid=1, volume=vol, peak=peak, active=True)
+    chrome = S("chrome.exe", 0.5, 0.1)             # the music, attenuated 20 dB by the bus -> 0.05 in the mix
+    obs = S("obs64.exe", 0.012, 1.0)               # OBS idle hiss at 100 %, just over the sounding threshold
+    assert [x.name for x in eng._sounding([chrome, obs])] == ["chrome.exe", "obs64.exe"]
+    assert eng._dominant([chrome, obs]).name == "chrome.exe"      # obs is 12 dB under in the mix
+    chrome.volume = 0.03                           # bus at -30 dB: chrome reaches the mix at 0.015
+    assert eng._dominant([chrome, obs]) is None                   # now obs really is comparable: nobody alone
+    assert eng._dominant([obs]).name == "obs64.exe"
+    assert eng._dominant([]) is None
