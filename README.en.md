@@ -158,6 +158,8 @@ Under `%APPDATA%\AutoLoud\`: `autoloud.log` is the run log; `adjust-<timestamp>.
 
 To see one application's history for a run: `pip install pandas matplotlib`, then `python tools\plot_app.py ZenlessZoneZero.exe` (latest run by default; a run timestamp can follow). It writes `<app>-<timestamp>.png` into the current folder, four panels on one time axis: the app's peak meter (dBFS) and session volume; the bus momentary / short-term / integrated perceived loudness with P, green where only this app was sounding (then the bus loudness is its loudness — the program measures the whole mix's LUFS, there is no per-app LUFS); the app's own source loudness (bus gain, fader and session volume removed, i.e. at 100 % session volume and the reference master; only where it sounded alone); bus gain, fader and session volume.
 
+To compare how often the user moved the volume with and without AutoLoud: `python tools\plot_volume.py` (latest run by default) writes `volume-<ts>.png`. The top panel is the level the user controls — in monitor-only stretches the Windows master (blue) with every key press (red) / slider move (green), in automatic-preset stretches P (orange) with every P-slider, volume-key and fader move; the bottom panel is AutoLoud's own automatic gain (purple) and target T (green dashed), empty while monitoring because nothing is moved then. Under the axis are Chrome's tab titles at the time (`--titles` picks another app), so each burst of moves can be matched to the track that was playing.
+
 ## Development and testing status
 
 AutoLoud is still being developed and tuned.

@@ -356,7 +356,10 @@ class Engine:
 
                 cmd = None
                 if not self._calibrating:
-                    if self.controller is not None and self.config.enabled:
+                    if self.controller is not None and self.config.enabled and not self.config.monitor_only:
+                        # (monitor only: the controller is not even consulted, so the adjust log
+                        # and meters.csv carry no phantom decisions and the user's own moves are
+                        # the only thing in the record)
                         rr = self._reading_for_auto_apps(r)
                         cap, start = self._onset_gains(sessions)
                         self.controller.boost_cap_db = self._boost_cap
@@ -604,6 +607,11 @@ class Engine:
                 pass
         else:
             self._applied_session_db.clear(); self._applied_master_db = None   # re-apply on the next tick
+            if self.controller is not None and self.profile is not None:
+                # start the controller afresh (IDLE -> onset) instead of from whatever
+                # gain it held when monitoring began
+                self.controller = GainController(self.profile.targets(), self.controller.params)
+                self._last_cmd = None
         self._event("monitor_on" if on else "monitor_off")
         self._dirty = True
 

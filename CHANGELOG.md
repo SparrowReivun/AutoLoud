@@ -2,6 +2,9 @@
 
 ## 0.4.1 — 2026-11-02
 
+- 仅监测模式下不再运行增益控制器：之前它仍在后台「空算」，adjust 日志和 meters.csv 里出现了并未施加的增益决策，而且关闭仅监测时会直接套用这个陈旧的增益。现在仅监测时段的日志只有用户自己的操作，退出仅监测从头开始起步。
+- 新增 `tools/plot_volume.py`：一次运行里用户的全部音量操作（仅监测 / 自动预设分色）与 AutoLoud 的自动增益、目标 T 画在同一时间轴上，横轴下方标出当时 Chrome 的标签页标题。
+
 - Quiet intros no longer get boosted into an overload: in 强力1, a source more than 6 LU under the app's own quiet platform (a fade-in, an intro, a loading screen) is never raised - the gain waits for the content (setting "intro / fade: never raised"). Seen 07:25: an intro at −44 under a −31 platform was raised +9 dB, then the song body hit the protection.
 - A new work now starts in the steady state (setting, on): whether it is too loud or too quiet is decided by the steady block counts, not by the first block alone; the first cut still goes all the way.
 - Built-in 强力1 follows the author's tuning (steady: 1 loud block over T + 4, 6 quiet blocks under T − 6; protection T + 16; X = 13).
