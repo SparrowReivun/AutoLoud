@@ -121,10 +121,11 @@ class DashboardPage(QWidget):
         lay.addWidget(meters)
 
         grid = QHBoxLayout()
+        self.k_src = self._kpi(grid, t("kpi.source"))
         self.k_total = self._kpi(grid, t("gain.total"))
-        self.k_session = self._kpi(grid, t("gain.session"))
-        self.k_master = self._kpi(grid, t("gain.master"))
-        self.k_target = self._kpi(grid, t("meter.target"))
+        self.k_p = self._kpi(grid, t("kpi.p"))
+        self.k_target = self._kpi(grid, t("kpi.target"))
+        self.k_src.setToolTip(t("meter.source.hint"))
         lay.addLayout(grid)
 
         act = Card()
@@ -197,7 +198,7 @@ class DashboardPage(QWidget):
 
     def _kpi(self, grid, label):
         c = Card()
-        l = QLabel(label); l.setObjectName("muted")
+        l = QLabel(label); l.setObjectName("muted"); l.setWordWrap(True)
         v = QLabel("—"); v.setObjectName("big")
         c.body.addWidget(l); c.body.addWidget(v)
         grid.addWidget(c)
@@ -295,10 +296,10 @@ class DashboardPage(QWidget):
         c = s.command
         if c is not None:
             self.k_total.setText(f"{c.total_db:+.1f} dB")
-            self.k_session.setText(f"{c.session_gain_db:+.1f} dB")
-            cap = getattr(self.engine.controller, "boost_cap_db", 1e9) if self.engine.controller else 1e9
-            at_cap = c.master_offset_db >= min(cap, self.engine.config.params.max_master_boost_db) - 0.05 and c.master_offset_db > 0
-            self.k_master.setText(f"{c.master_offset_db:+.1f} dB" + ("  " + t("gain.master.cap") if at_cap else ""))
+            sole_s, _sm_s, ss_s = self.engine.source_loudness(s.sessions, r, c)
+            self.k_src.setText(f"{ss_s:.1f}" if ss_s is not None else "—")
+            self.k_src.setToolTip(t("meter.source.hint") + ("\n" + self.engine.config.display_name(sole_s) if sole_s else ""))
+            self.k_p.setText(t("dash.b.mute") if p is not None and p.b_lufs <= -89.95 else (f"{p.b_lufs:.1f}" if p else "—"))
             self.k_target.setText(f"{c.target_lufs:.1f}")
             ctl = self.engine.controller
             if ctl is not None and ctl.params.target_mode == "source":
@@ -317,7 +318,7 @@ class DashboardPage(QWidget):
                    Phase.STEADY: "status.steady", Phase.SAFETY: "status.safety"}[c.phase]
         else:
             key = "status.calibrating" if s.calibrating else "status.disabled"
-            for k in (self.k_total, self.k_session, self.k_master, self.k_target):
+            for k in (self.k_total, self.k_src, self.k_p, self.k_target):
                 k.setText("—")
             for m in (self.m_mom, self.m_st, self.m_int):
                 m.set_marker("T", None)

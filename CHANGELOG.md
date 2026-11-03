@@ -2,6 +2,7 @@
 
 ## 0.4.1 — 2026-11-02
 
+- Dashboard tiles are now: source loudness (short-term 3 s of the sole sounding app), total gain, comfort level P, target T (with u in 强力1). Session gain and master boost are gone from the tiles (the master no longer moves).
 - Built-in presets follow the author's current tuning (强力1: protection T + 16.5, X = 10 LU, 10 s silence); a fresh config starts in 强力1; key step 0.4 dB.
 - Dashboard meters and the P slider now run from −90 to 0 LUFS (were −60); the slider's bottom (−90) is mute.
 - Exit pop (since the master became managed): a control tick still in flight after the volumes were restored re-parked the master at 80 % under sessions already back at 100 %. Ticks are no-ops once stopping, and stop waits up to 6 s for the thread.
