@@ -32,7 +32,7 @@ AutoLoud 是 Windows 上的自动响度均衡器：监听系统回录（WASAPI l
 - **仅监测**：不动任何音量，控制器完全不运行；首页 P 滑块变成 Windows 主音量 0–100%，音量键交回 Windows；所有设置原样保留。用于对照实验。
 - **强力1**（作者日常使用、新装默认）：源跟踪目标 + 平台学习 + 前奏不抬升（源低于 C_low 6 LU 以上不升）+ 新作品直接进稳定态 + 比例步长（远离 T 时每步至少补一半误差）。
 - **参数以作者本机为准**。作者说「同步参数」时：读本机 `config.json` 的 `presets`，把差异写进 `autoloud/core/profiles.py` 的 `BUILTIN_PRESETS`，更新 `tests/test_source_target.py` 的预期值和 CHANGELOG。已有用户的预设不会被覆盖，只影响新装。
-- 其它由本机决定的默认：启动主音量 80%、退出/崩溃主音量 1%（作者本机目前 40%，未同步）、音量键步长 0.4 dB、默认设备同步开。
+- 其它由本机决定的默认：启动主音量 80%、退出/崩溃主音量 40%、音量键步长 0.4 dB、默认设备同步开、推子范围 +40 dB（0.4.3 起与作者本机一致）。
 
 ## 4. 代码地图
 
@@ -97,7 +97,6 @@ tools/plot_volume.py          用户操作 vs 自动增益（--list 列运行）
 
 ## 9. 待办 / 开放问题
 
-- 0.4.2 Release：目录版打包在 CI 上还没完整跑过一次，推标签后看 Actions。
-- 作者本机 `exit_master_percent` = 40，代码默认 1，待作者决定。
+- 0.4.3 Release：推 `v0.4.3` 标签后看 Actions 是否完整打包（0.4.2 起的目录版）。
 - 慢泄漏：0.4.3 修了 LPWSTR 字符串泄漏（见第 8 节）。看新版 `memory:` 行的 private 趋势确认是否已平；若仍涨，看 py 是否同涨（Python 侧 → 开 AUTOLOUD_TRACEMALLOC）还是只有 private 涨（再查 winsdk 媒体会话、PortAudio）。`tools/com_leak_check.py` 可对比新旧路径。
 - 对照实验设计：每位受试者每种条件各开一次（或切一次模式），用 `plot_volume.py` 对比操作次数与幅度。

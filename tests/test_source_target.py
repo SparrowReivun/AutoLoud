@@ -150,3 +150,13 @@ def test_dominant_app_ignores_an_idle_session_well_under_it_in_the_mix():
     assert eng._dominant([chrome, obs]) is None                   # now obs really is comparable: nobody alone
     assert eng._dominant([obs]).name == "obs64.exe"
     assert eng._dominant([]) is None
+
+
+def test_builtin_presets_follow_author_tuning():
+    from autoloud.core.profiles import AppConfig
+    p = AppConfig.builtin_preset("强力1")
+    assert p["target_mode"] == "source" and p["source_range_db"] == 11.0
+    assert p["safety_margin_db"] == 17.5 and p["deadband_up_db"] == 0.5 and p["deadband_down_db"] == 0.5
+    c = AppConfig()
+    assert c.exit_master_percent == 40.0 and c.startup_master_percent == 80.0
+    assert c.volume_key_step_db == 0.4 and c.mixer_range_db == 40.0
