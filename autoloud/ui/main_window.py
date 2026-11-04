@@ -94,6 +94,14 @@ class DashboardPage(QWidget):
         bcard.body.addWidget(bhint)
         self.volkeys_note = QLabel(""); self.volkeys_note.setWordWrap(True); self.volkeys_note.setObjectName("muted")
         bcard.body.addWidget(self.volkeys_note)
+        # start with Windows (recommended): the whole point is to forget the volume exists
+        from autoloud.core import autostart
+        self.autostart = QCheckBox(t("dash.autostart"))
+        self.autostart.setToolTip(t("dash.autostart.tip"))
+        self.autostart.setChecked(autostart.enabled())
+        self.autostart.setVisible(autostart.available())
+        self.autostart.toggled.connect(self._autostart_toggled)
+        bcard.body.addWidget(self.autostart)
         trow = QHBoxLayout()
         trow.addWidget(QLabel(t("dash.thr")))
         self.thr_slider = NoWheelSlider(Qt.Horizontal); self.thr_slider.setRange(-10, 50)   # x0.5 dB
@@ -239,6 +247,15 @@ class DashboardPage(QWidget):
             self.engine._event("mode", name=data)
         self.engine.rotate_logs()              # one log set per mode
         cfg.save()
+
+    def _autostart_toggled(self, on: bool):
+        from autoloud.core import autostart
+        ok = autostart.set_enabled(on)
+        if not ok:
+            self.autostart.blockSignals(True); self.autostart.setChecked(autostart.enabled()); self.autostart.blockSignals(False)
+            self.engine._event("autostart_failed")
+        else:
+            self.engine._event("autostart_on" if on else "autostart_off")
 
     def _b_changed(self, v):
         if self._slider_master:

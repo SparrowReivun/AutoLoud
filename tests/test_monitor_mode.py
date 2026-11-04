@@ -72,3 +72,12 @@ def test_mode_slugs_and_log_rotation(tmp_path, monkeypatch):
     s1 = next(p for p in (tmp_path / "logs").iterdir() if p.name.startswith("volume-") and "strong1" in p.name)
     assert "user_master" in mon.read_text() and "p_slider" not in mon.read_text()
     assert "p_slider" in s1.read_text()
+
+
+def test_autostart_is_a_no_op_off_windows():
+    from autoloud.core import autostart
+    import sys
+    if sys.platform.startswith("win"):
+        return
+    assert not autostart.available() and not autostart.enabled() and not autostart.set_enabled(True)
+    assert "run.py" in autostart.command() or "AutoLoud" in autostart.command()

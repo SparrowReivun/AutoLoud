@@ -2,6 +2,7 @@
 
 ## 0.4.2 — 2026-11-03
 
+- Dashboard: "Start AutoLoud with Windows (recommended)" tick box - a Run entry for the current user (no admin), pointing at this installation (the exe, or pythonw run.py from source); the box shows the registry's actual state.
 - Built-in 强力1 follows the author's current tuning: dead band ±0.5 dB, snap 1 dB, steps +0.5 / −1 dB (half the error when far), steady: 2 loud blocks over T + 2.5, 3 quiet blocks under T − 4, protection T + 18, X = 11 LU, boost cap 38 dB.
 - MemoryError after ~4 h: every engine state change (100+ per second) was also posted to the GUI thread as a queued signal carrying a state snapshot; whenever the GUI thread fell behind, that queue only grew. The UI now only polls the state 10x a second (it already did). The process's memory is logged every 10 min in `autoloud.log`.
 - Single-app attribution (source loudness, platforms, per-app preset, `sole_app`) now asks which app *dominates the mix* - loudest by peak x session volume, every other sounding app at least ~10 dB under it - instead of requiring exactly one app over the peak threshold. An idle session hovering at that threshold (OBS's monitor hiss at 100 % while the music sits 30 dB down) kept flipping the source reading to '—'. A new work in an app that is sounding but not the dominant one (a WeChat notification behind the music) no longer re-targets the bus to that app's remembered gain (14:02:19: bus jumped −28.4 → −24.8 dB for a WeChat blip).
