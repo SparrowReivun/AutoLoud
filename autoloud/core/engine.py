@@ -240,17 +240,15 @@ class Engine:
                               peak_dbfs=-100.0, has_signal=False)
 
     def _memory_watch(self, now: float) -> None:
-        """Every 10 min: the process's memory in autoloud.log, so a slow leak
-        shows up as a trend long before it becomes a MemoryError."""
-        if now - getattr(self, "_mem_t", 0.0) < 600.0:
-            return
-        self._mem_t = now
-        try:
-            import psutil
-            rss = psutil.Process().memory_info().rss / 1e6
-            log.info("memory: %.0f MB rss, %d threads", rss, threading.active_count())
-        except Exception:
-            pass
+        """Every 10 min: the process's memory in autoloud.log - private bytes,
+        not just RSS (see core/memdiag.py for why) - and a warning in the
+        activity log once the private bytes look like a leak."""
+        w = getattr(self, "_memwatch", None)
+        if w is None:
+            from autoloud.core.memdiag import MemoryWatch
+            w = self._memwatch = MemoryWatch(
+                on_warn=lambda smp: self._event("memory_high", mb=smp.private_mb))
+        w.tick(now)
 
     def _capture_watch(self, r: LoudnessReading, sessions: list[AudioSession], now: float) -> LoudnessReading:
         """The WASAPI loopback stream can die quietly (a Bluetooth headset

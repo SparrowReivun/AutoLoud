@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.3 — unreleased
+
+- Fix: Windows ran out of memory after hours of running, the Windows Audio service died, every output device vanished, and the Start menu / shutdown hung until a hard reset (2026-11-03 19:24 and 2026-11-04 18:04). Event 2004 (Resource-Exhaustion-Detector) named python.exe = AutoLoud with 1.8–1.9 GB of virtual memory, while `autoloud.log` said 157 MB RSS (RSS is the working set, which Windows trims; leaked pages that are never touched again drop out of it). Cause: pycaw declares `GetSessionInstanceIdentifier` / `GetId` / `GetDisplayName` as `[out] LPWSTR`, and comtypes hands back a Python string without `CoTaskMemFree`-ing the COM buffer, so every call leaked the string natively. The session poll read every session's instance id twice a second. These strings are now read through the raw vtable slot and freed (`_com_str`); the per-session meter interface is also cached per session instance instead of re-queried on every poll. Backend version 0.8-freestrings.
+- Memory diagnostics (`autoloud/core/memdiag.py`): the 10-min `memory:` line in `autoloud.log` now carries private bytes (what event 2004 counts), Python allocator blocks and object count (Python vs native leak), threads, the system's free commit / commit limit, and the PID (to match event 2004). Over 1 GB of private bytes (then every further 512 MB) a warning goes to `autoloud.log` and the activity log suggests a restart. `AUTOLOUD_TRACEMALLOC=1` also logs the five source lines whose Python allocations grew most per interval.
+- `tools/com_leak_check.py`: runs the session poll N times with the old and the new code path and prints the private-bytes growth of each (Windows).
+
 ## 0.4.2 — 2026-11-03
 
 - Dashboard: "Start AutoLoud with Windows (recommended)" tick box - a Run entry for the current user (no admin), pointing at this installation (the exe, or pythonw run.py from source); the box shows the registry's actual state.

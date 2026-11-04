@@ -61,6 +61,7 @@ _T = {
     "apps.tool": ("工具类应用", "tool app"),
     "ev.cut_moved": ("这次突响来自别的应用 → 总线增益回到 {gain:+.1f} dB，只压那个应用", "The loud sound came from another app → bus gain back to {gain:+.1f} dB, only that app is cut"),
     "ev.app_cut": ("{app} 突然插进来太响 → 单独压它 {cut:.1f} dB，其它应用不动", "{app} barged in loud → cut it alone by {cut:.1f} dB, other apps untouched"),
+    "ev.memory_high": ("AutoLoud 内存占用 {mb:.0f} MB，疑似泄漏 → 建议重启 AutoLoud（日志请保留）", "AutoLoud is using {mb:.0f} MB of memory, likely a leak → please restart AutoLoud (keep the logs)"),
     "ev.app_cut_end": ("{app} 安静了 → 撤销对它的单独压低", "{app} went quiet → its extra cut is lifted"),
     "ev.strong_on": ("{app} 进入强力模式（推子保持 {off:+.1f} dB，之后每次触发保护再往下拉）", "{app} strong mode on (fader stays at {off:+.1f} dB, pulled down on every protection cut from now on)"),
     "ev.strong_off": ("{app} 退出强力模式（推子保持 {off:+.1f} dB）", "{app} strong mode off (fader stays at {off:+.1f} dB)"),

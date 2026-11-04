@@ -32,9 +32,11 @@ from pycaw.pycaw import (  # type: ignore
 )
 from pycaw.constants import AudioSessionState  # type: ignore
 from pycaw.api.mmdeviceapi.depend.structures import PROPERTYKEY  # type: ignore
+from pycaw.api.mmdeviceapi import IMMDevice  # type: ignore
+from pycaw.api.audiopolicy import IAudioSessionControl  # type: ignore
 from comtypes import GUID  # type: ignore
 
-BACKEND_VERSION = "0.7-policyconfig"
+BACKEND_VERSION = "0.8-freestrings"
 
 # ---- IPolicyConfig (undocumented, what the Sound control panel uses to set the default device) ----
 from ctypes import c_void_p, c_longlong, POINTER as _PTR  # noqa: E402
@@ -65,6 +67,41 @@ class IPolicyConfig(IUnknown):
         COMMETHOD([], HRESULT, "SetDefaultEndpoint", (["in"], LPCWSTR), (["in"], DWORD)),
         COMMETHOD([], HRESULT, "SetEndpointVisibility", (["in"], LPCWSTR), (["in"], INT)),
     ]
+
+# ---- COM methods that hand back a CoTaskMemAlloc'd string ----------------
+# pycaw declares GetId / GetDisplayName / GetSessionInstanceIdentifier... as
+# [out] LPWSTR. comtypes turns that into a Python str and never calls
+# CoTaskMemFree on the buffer, so every call leaks the string natively - it
+# never shows in Python's allocator nor (once Windows trims the working set) in
+# RSS. _list_sessions asked every session for its instance id twice a second;
+# with a dozen sessions (Chrome alone holds several) that is a steady native
+# leak until Windows runs out of commit memory (event 2004 named python.exe
+# with 1.8-1.9 GB on 2026-11-03 19:24 and 2026-11-04 18:03; Windows Audio died
+# seconds later). Call the raw vtable slot instead and free the buffer.
+from ctypes import byref as _byref, cast as _cast, windll as _windll  # noqa: E402
+from ctypes.wintypes import LPWSTR as _LPWSTR  # noqa: E402
+
+_CoTaskMemFree = _windll.ole32.CoTaskMemFree
+_CoTaskMemFree.argtypes = [c_void_p]
+_CoTaskMemFree.restype = None
+
+
+def _com_str(obj, iface: type, method: str) -> str:
+    """Call ``iface.method([out] LPWSTR*)`` on ``obj`` and free the returned
+    buffer. Falls back to the comtypes wrapper (leaking, as before) if the raw
+    slot is not reachable under this comtypes version."""
+    raw = getattr(obj, f"_{iface.__name__}__com_{method}", None)
+    if raw is None:
+        return getattr(obj, method)() or ""
+    p = _LPWSTR()
+    raw(_byref(p))                        # HRESULT failures raise COMError
+    addr = _cast(p, c_void_p).value
+    try:
+        return p.value or ""
+    finally:
+        if addr:
+            _CoTaskMemFree(addr)
+
 
 # DEVPKEY_Device_FriendlyName = {a45c254e-df1c-4efd-8020-67d146a850e0}, 14
 _PKEY_FRIENDLY_NAME = PROPERTYKEY()
@@ -189,6 +226,7 @@ class WindowsBackend:
         self._session_cache: dict[str, dict] = {}      # key -> {session instance: ISimpleAudioVolume}
         self._endpoint_cache: dict[str, object] = {}   # device id -> IAudioEndpointVolume
         self._mgr_cache: dict[str, object] = {}        # device id -> IAudioSessionManager2
+        self._meter_cache: dict[str, object] = {}      # session instance -> IAudioMeterInformation
         self._com = _ComWorker(on_restart=self._drop_caches)
 
     def _drop_caches(self) -> None:
@@ -196,6 +234,7 @@ class WindowsBackend:
         self._session_cache = {}
         self._endpoint_cache = {}
         self._mgr_cache = {}
+        self._meter_cache = {}
 
     def thread_init(self) -> None:
         """Kept for interface compatibility; COM lives on its own thread now."""
@@ -222,7 +261,7 @@ class WindowsBackend:
         enum = AudioUtilities.GetDeviceEnumerator()
         default_id = None
         try:
-            default_id = enum.GetDefaultAudioEndpoint(0, 1).GetId()   # eRender, eMultimedia
+            default_id = _com_str(enum.GetDefaultAudioEndpoint(0, 1), IMMDevice, "GetId")   # eRender, eMultimedia
         except Exception:
             log.exception("GetDefaultAudioEndpoint failed")
         try:
@@ -231,7 +270,7 @@ class WindowsBackend:
                 dev = coll.Item(i)
                 if dev is None:
                     continue
-                dev_id = dev.GetId()
+                dev_id = _com_str(dev, IMMDevice, "GetId")
                 name = self._friendly_name(dev) or f"Output device {i + 1}"
                 out.append(OutputDevice(id=dev_id, name=name, is_default=(dev_id == default_id)))
         except Exception:
@@ -266,7 +305,7 @@ class WindowsBackend:
             for role in (0, 1, 2):          # eConsole, eMultimedia, eCommunications
                 pc.SetDefaultEndpoint(device.id, role)
             enum = AudioUtilities.GetDeviceEnumerator()
-            now_id = enum.GetDefaultAudioEndpoint(0, 1).GetId()
+            now_id = _com_str(enum.GetDefaultAudioEndpoint(0, 1), IMMDevice, "GetId")
             ok = now_id == device.id
             log.info("Windows default output -> %r: %s", device.name, "ok" if ok else f"not applied (now {now_id})")
             return ok
@@ -423,6 +462,8 @@ class WindowsBackend:
             # several sessions (Chrome does): every one of them gets the volume.
             old_cache: dict[str, dict] = self._session_cache
             new_cache: dict[str, dict] = {}
+            old_meters = self._meter_cache
+            new_meters: dict[str, object] = {}
             by_key: dict[str, AudioSession] = {}
             for i in range(count):
                 ctl = enumerator.GetSession(i)
@@ -436,14 +477,15 @@ class WindowsBackend:
                 name = self._process_name(pid, ctl2)
                 key = f"{pid}:{name}"
                 try:
-                    inst = str(ctl2.GetSessionInstanceIdentifier())
+                    inst = _com_str(ctl2, IAudioSessionControl2, "GetSessionInstanceIdentifier")
                 except Exception:
                     inst = f"#{i}"
                 inst = f"{device.id}|{inst}"
                 vol = old_cache.get(key, {}).get(inst) or ctl.QueryInterface(ISimpleAudioVolume)
                 try:
-                    meter = ctl.QueryInterface(IAudioMeterInformation)
+                    meter = old_meters.get(inst) or ctl.QueryInterface(IAudioMeterInformation)
                     peak = float(meter.GetPeakValue())
+                    new_meters[inst] = meter
                 except Exception:
                     peak = 0.0
                 new_cache.setdefault(key, {})[inst] = vol
@@ -463,6 +505,7 @@ class WindowsBackend:
                     )
             result = list(by_key.values())
             self._session_cache = new_cache
+            self._meter_cache = new_meters
         except Exception as e:  # pragma: no cover
             log.exception("list_sessions failed: %s", e)
             self._mgr_cache.pop(device.id, None)
@@ -477,7 +520,7 @@ class WindowsBackend:
             return psutil.Process(pid).name()
         except Exception:
             try:
-                return ctl2.GetDisplayName() or f"pid {pid}"
+                return _com_str(ctl2, IAudioSessionControl, "GetDisplayName") or f"pid {pid}"
             except Exception:
                 return f"pid {pid}"
 
@@ -524,6 +567,7 @@ class WindowsBackend:
             self._session_cache.clear()
             self._endpoint_cache.clear()
             self._mgr_cache.clear()
+            self._meter_cache.clear()
         try:
             self._com.call(release)
         except Exception:

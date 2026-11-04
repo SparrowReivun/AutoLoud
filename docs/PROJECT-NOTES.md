@@ -1,7 +1,7 @@
 # AutoLoud 项目备忘：背景、关键记忆与文档约定
 
 > 给未来的自己和协作者（人或 AI）看的。新开一轮工作前先读这一页，再读 `CHANGELOG.md` 最上面一节。
-> 最后更新：2026-11-04（v0.4.2 准备发布时）。
+> 最后更新：2026-11-04（0.4.3：内存泄漏修复与诊断）。
 
 ## 1. 这个项目是什么
 
@@ -62,7 +62,8 @@ tools/plot_volume.py          用户操作 vs 自动增益（--list 列运行）
 - 位置：程序旁的 `logs\`（源码运行即项目目录 `logs\`；不可写时退回 `%APPDATA%\AutoLoud`）。`.gitignore` 已排除。
 - 每次启动和每次切换模式新开一组：`adjust-/meters-/apps-/volume-<YYYYMMDD-HHMMSS>-<mode>.*`，mode ∈ monitor / default / strong / strong1 / 自定义 ASCII。一个文件 = 一种实验条件。
 - `volume-*.csv`：用户每次音量操作（volkey / volkey_master / user_master / master_slider / p_slider / fader）及当时模式——有无 AutoLoud 的对照指标。
-- `autoloud.log` 每 10 min 记一行 `memory: … MB rss`，用来发现慢泄漏。
+- `autoloud.log` 每 10 min 记一行 `memory: … MB rss, … MB private, py … blocks / … objects, … threads, commit free … / … MB, pid …`。**看 private，不看 rss**（rss 是工作集，会被 Windows 裁掉）；private 涨而 py 不涨 = 原生/COM 泄漏。private 过 1 GB 起每 +512 MB 告警一次。`AUTOLOUD_TRACEMALLOC=1` 时额外记 Python 分配增长最多的 5 行。
+- 系统级证据：PowerShell `Get-WinEvent` 查 System 日志的 2004（虚拟内存不足，列出占用最多的进程）、7031（服务意外终止）、Kernel-Power 41（强制断电）。
 - 画图：`.venv\Scripts\python tools\plot_volume.py --list` 挑运行，`… plot_volume.py <运行id>` 出 `volume-<id>.png`；`--titles` 换标题来源应用，`--csv-dir` 读别处。
 
 ## 6. 文档约定
@@ -92,10 +93,11 @@ tools/plot_volume.py          用户操作 vs 自动增益（--list 列运行）
 - 安静前奏被抬升后正片过载 → 前奏规则；新作品直接进稳定态。
 - svchost / audiodg / 系统声音不算发声应用。
 - 微信通知在音乐后面触发「新作品」把总线拉走 → 只有主导应用的新作品才重定向。
+- pycaw 里 `[out] LPWSTR` 的方法（GetSessionInstanceIdentifier / GetId / GetDisplayName / GetIconPath / GetSessionIdentifier）经 comtypes 调用**不会 CoTaskMemFree**，每次调用原生泄漏一个字符串 → 一律用 `windows._com_str(obj, 接口类, "方法名")`。曾在约 7 小时内漏到 1.9 GB，耗尽系统提交内存，Windows Audio 崩溃、设备全部消失、关机卡死（11-03 19:24、11-04 18:04）。
 
 ## 9. 待办 / 开放问题
 
 - 0.4.2 Release：目录版打包在 CI 上还没完整跑过一次，推标签后看 Actions。
 - 作者本机 `exit_master_percent` = 40，代码默认 1，待作者决定。
-- 慢泄漏第二候选：Windows 会话 COM 对象；看 `memory:` 日志趋势。
+- 慢泄漏：0.4.3 修了 LPWSTR 字符串泄漏（见第 8 节）。看新版 `memory:` 行的 private 趋势确认是否已平；若仍涨，看 py 是否同涨（Python 侧 → 开 AUTOLOUD_TRACEMALLOC）还是只有 private 涨（再查 winsdk 媒体会话、PortAudio）。`tools/com_leak_check.py` 可对比新旧路径。
 - 对照实验设计：每位受试者每种条件各开一次（或切一次模式），用 `plot_volume.py` 对比操作次数与幅度。
