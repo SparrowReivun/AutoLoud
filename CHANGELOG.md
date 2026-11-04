@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.3 — unreleased
+## 0.4.3 — 2026-11-04
 
 - Fresh-config defaults follow the author's machine: built-in 强力1 protection at T + 17.5 (was 18); master volume left on exit / crash 40 % (was 1 %); mixer fader range +40 dB (the dataclass said 15 while loading said 40). Existing configs keep their own values.
 - Fix: Windows ran out of memory after hours of running, the Windows Audio service died, every output device vanished, and the Start menu / shutdown hung until a hard reset (2026-11-03 19:24 and 2026-11-04 18:04). Event 2004 (Resource-Exhaustion-Detector) named python.exe = AutoLoud with 1.8–1.9 GB of virtual memory, while `autoloud.log` said 157 MB RSS (RSS is the working set, which Windows trims; leaked pages that are never touched again drop out of it). Cause: pycaw declares `GetSessionInstanceIdentifier` / `GetId` / `GetDisplayName` as `[out] LPWSTR`, and comtypes hands back a Python string without `CoTaskMemFree`-ing the COM buffer, so every call leaked the string natively. The session poll read every session's instance id twice a second. These strings are now read through the raw vtable slot and freed (`_com_str`); the per-session meter interface is also cached per session instance instead of re-queried on every poll. Backend version 0.8-freestrings.
