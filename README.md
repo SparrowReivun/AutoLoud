@@ -229,17 +229,17 @@ AutoLoud 不再仅仅将音量调整视为一次操作，而是把它看作用�
 
 在获得应用历史响度分布后，AutoLoud 会计算当前源响度在两个参考值之间的相对位置：
 
-$$
-u=\operatorname{clip}\left(\frac{L_{\mathrm{src}}-C_{\mathrm{low}}}{C_{\mathrm{high}}-C_{\mathrm{low}}},0,1\right)
-$$
+```math
+u=\mathrm{clip}\left(\frac{L_{\mathrm{src}}-C_{\mathrm{low}}}{C_{\mathrm{high}}-C_{\mathrm{low}}},0,1\right)
+```
 
 其中，`clip` 表示将结果限制在 0 到 1 之间。
 
 随后，根据用户偏好响度 P 和预设的动态范围参数 X，计算目标响度 T：
 
-$$
+```math
 T=(P-X)+X\cdot u
-$$
+```
 
 | 参数 | 含义 |
 | --- | --- |
@@ -263,27 +263,27 @@ $$
 
 假设某个应用的历史响度参考值为：
 
-$$
+```math
 C_{\mathrm{low}}=-25\ \mathrm{LUFS}, \qquad C_{\mathrm{high}}=-17\ \mathrm{LUFS}
-$$
+```
 
 两者相距 8 LU。则当前源响度的相对位置为：
 
-$$
-u=\operatorname{clip}\left(\frac{L_{\mathrm{src}}+25}{8},0,1\right)
-$$
+```math
+u=\mathrm{clip}\left(\frac{L_{\mathrm{src}}+25}{8},0,1\right)
+```
 
 假设用户偏好响度为：
 
-$$
+```math
 P=-25\ \mathrm{LUFS}, \qquad X=6\ \mathrm{LU}
-$$
+```
 
 则目标响度为：
 
-$$
+```math
 T=-31+6u
-$$
+```
 
 | 当前源响度 | 相对位置 u | 目标响度 T |
 | --- | ---: | ---: |
