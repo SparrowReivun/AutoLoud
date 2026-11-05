@@ -9,14 +9,14 @@ AutoLoud 是 Windows 上的自动响度均衡器：监听系统回录（WASAPI l
 
 - 作者：J（jinjie.shi@qmul.ac.uk），QMUL C4DM（Centre for Digital Music）自动混音研究背景。
 - 仓库：https://github.com/SparrowReivun/AutoLoud ，分支 `main`，许可 CC BY-NC 4.0。
-- 本机：`C:\Users\sparrow\Documents\AutoLoud`（项目），`C:\Users\sparrow\AppData\Roaming\AutoLoud\config.json`（配置）。
+- 本机：`C:\Users\sparrow\Documents\AutoLoud`（项目），`C:\Users\sparrow\Documents\AutoLoud\config.json`（配置，随程序目录；旧位置 `%APPDATA%\AutoLoud` 只作备份/回退）。
 - 宣传语：「你调一次，剩下的交给 AutoLoud。」README 有 zh / en / ja / ko / ru 五个版本，顶部有语言栏。
 
 ## 2. 核心概念与命名（文档里必须统一）
 
 | 符号 | 名称 | 含义 |
 | --- | --- | --- |
-| **P** | 舒适响度（human preference loudness） | 用户偏好。首页滑块、音量键/旋钮改的就是它。范围 −90…0 LUFS，−90 = 静音。 |
+| **P** | 舒适响度（human preference loudness） | 用户偏好。首页滑块、音量键/旋钮改的就是它。内部 −90…0 LUFS，界面显示 0–100 %（线性 dB，1 % = 0.9 dB），0 % = 静音。没有校准流程：新设备继承上次的 P。 |
 | **T** | 目标响度（target loudness） | 控制器此刻追的目标。固定目标模式下 T = P；源跟踪模式下 T = (P − X) + X·u。 |
 | X | 目标变化范围 | 强力1 的参数（当前 11 LU）。 |
 | u | 源响度相对位置 | u = clip((L_src − C_low) / (C_high − C_low), 0, 1)。 |
@@ -47,7 +47,7 @@ autoloud/core/meterlog.py     meters / apps / volume csv；adjustlog.py 决策�
 autoloud/core/autostart.py    开机自启动（HKCU Run）
 autoloud/backends/windows.py  PyAudioWPatch + pycaw + IPolicyConfig；所有 COM 在一个线程
 autoloud/backends/mock.py     同接口模拟器（测试与 Linux 开发用）
-autoloud/ui/                  PySide6：总览 / 校准向导 / 混音台 / 设置 / 托盘；i18n.py 中英文案
+autoloud/ui/                  PySide6：总览 / 混音台 / 设置 / 托盘；i18n.py 中英文案
 tools/plot_app.py             某应用一次运行的四幅图
 tools/plot_volume.py          用户操作 vs 自动增益（--list 列运行）
 ```

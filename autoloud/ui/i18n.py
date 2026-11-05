@@ -82,7 +82,7 @@ _T = {
     "ev.default_device": ("Windows 默认输出设备 → {name}（{ok}）", "Windows default output → {name} ({ok})"),
     "dash.volkeys.note": ("音量键 / 旋钮现在调的是舒适响度 P，不再改 Windows 主音量（主音量由程序管理；全屏游戏里按键被系统拿走时也会被换算成 P；设置页可关）。",
                           "Volume keys / knob now move the comfort level P, not the Windows master volume (the master is managed by AutoLoud; a press Windows takes in a full-screen game is converted to P as well; can be switched off on the Settings page)."),
-    "dash.b.hint": ("像音量旋钮一样拖：声音立刻跟着变，停下的位置就是新的目标 P。拖到来源本身达不到的位置时，提升会停在主音量余量的上限（不会削波）。",
+    "dash.b.hint": ("像音量旋钮一样拖：声音立刻跟着变，停下的位置就是新的舒适响度 P（0 % 静音，100 % 最响；悬停可看 LUFS 值）。拖到来源本身达不到的位置时，提升会停在主音量余量的上限（不会削波）。",
                     "Drag it like a volume knob: the sound follows at once and where you stop becomes the new target P. Beyond what the source can reach, the boost stops at the master-volume headroom (no clipping)."),
     "act.off": ("自动响度未在工作", "Auto loudness is not running"),
     "act.ramp": ("正在调整：{frm:+.1f} → {to:+.1f} dB（{d:+.1f} dB，{dur:.1f} s 内，还剩 {left:.1f} s）",

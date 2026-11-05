@@ -37,7 +37,9 @@ def params_from_dict(d: dict) -> ControllerParams:
                                if k in ControllerParams.__dataclass_fields__ and k not in INTERNAL_PARAMS})
 
 
-def config_dir() -> Path:
+def roaming_dir() -> Path:
+    """The per-user folder (%APPDATA%\\AutoLoud): where config.json lived before
+    0.4.6, and the fall-back when the program's own folder cannot be written."""
     if sys.platform.startswith("win"):
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     else:
@@ -54,22 +56,48 @@ def app_dir() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _writable(d: Path) -> bool:
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        probe = d / ".write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        return True
+    except Exception:
+        return False
+
+
+def config_dir() -> Path:
+    """Where config.json lives: next to the program (portable - copy the folder and
+    the settings travel with it), unless that folder cannot be written (Program
+    Files) - then the per-user folder. ``AUTOLOUD_CONFIG_DIR`` overrides; tests
+    (``AUTOLOUD_MOCK``) stay in the per-user folder they isolate. A config still in
+    the per-user folder is copied next to the program once (the old file stays)."""
+    override = os.environ.get("AUTOLOUD_CONFIG_DIR")
+    if override:
+        d = Path(override); d.mkdir(parents=True, exist_ok=True); return d
+    if os.environ.get("AUTOLOUD_MOCK"):
+        return roaming_dir()
+    d = app_dir()
+    if not _writable(d):
+        return roaming_dir()
+    here, old = d / "config.json", roaming_dir() / "config.json"
+    if not here.exists() and old.exists():
+        try:
+            import shutil
+            shutil.copy2(old, here)
+        except Exception:
+            pass
+    return d
+
+
 def log_dir() -> Path:
     """``logs/`` next to the program (easy to find), unless that folder cannot be
-    written (e.g. installed under Program Files) - then the config folder.
+    written (e.g. installed under Program Files) - then the per-user folder.
     ``AUTOLOUD_LOG_DIR`` overrides both."""
     override = os.environ.get("AUTOLOUD_LOG_DIR")
-    candidates = [Path(override)] if override else [app_dir() / "logs"]
-    for d in candidates:
-        try:
-            d.mkdir(parents=True, exist_ok=True)
-            probe = d / ".write-test"
-            probe.write_text("ok", encoding="utf-8")
-            probe.unlink()
-            return d
-        except Exception:
-            continue
-    return config_dir()
+    d = Path(override) if override else app_dir() / "logs"
+    return d if _writable(d) else roaming_dir()
 
 
 MODE_SLUGS = {"默认": "default", "强力": "strong", "强力1": "strong1"}
@@ -339,7 +367,18 @@ class AppConfig:
             self.apps[app_name] = AppMix(offset_db=self.DEFAULT_APP_OFFSETS.get(app_name, 0.0))
         return self.apps[app_name]
 
+    DEFAULT_P_LUFS = -30.0        # a never-seen device starts here (the slider is the whole "calibration")
+
     def profile_for(self, device_id: str, device_name: str) -> DeviceProfile:
+        """A device's profile; a new device inherits P from the device used last
+        (else the default) and needs no calibration - P is simply the slider."""
         if device_id not in self.profiles:
-            self.profiles[device_id] = DeviceProfile(device_id=device_id, device_name=device_name)
-        return self.profiles[device_id]
+            b = self.DEFAULT_P_LUFS
+            known = [q for q in self.profiles.values() if q.calibrated]
+            if known:
+                b = known[-1].b_lufs
+            self.profiles[device_id] = DeviceProfile(device_id=device_id, device_name=device_name,
+                                                     calibrated=True, b_lufs=b)
+        prof = self.profiles[device_id]
+        prof.calibrated = True
+        return prof

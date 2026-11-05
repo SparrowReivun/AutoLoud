@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- No more calibration: the wizard, the "re-calibrate" button and the "not calibrated" badge are gone. A new device starts with the P of the device used last (−30 LUFS the very first time) and P is simply the dashboard slider.
+- P is shown as a percentage: 0 % = mute (−90 LUFS) … 100 % = 0 LUFS, linear in dB (1 % = 0.9 dB); the LUFS value is in the tooltip. Logs and the meters keep LUFS.
+- `config.json` now lives next to the program (portable: copy the folder, the settings come along); a config still in `%APPDATA%\AutoLoud` is copied over once (the old file stays as a backup). Falls back to `%APPDATA%` when the program folder is not writable; `AUTOLOUD_CONFIG_DIR` overrides.
 - Mixer: "System sounds" (Windows notification / error dings, pid 0) now starts with its fader at −40 dB instead of 0 dB: at a quiet listening level an unattenuated ding is far louder than the content. The entry is created as soon as the session is seen, so the default applies even before the mixer page is opened. Existing configs: a System sounds fader still at 0 dB is moved to −40 dB once (presets_version 8); any other value the user set is kept.
 
 ## 0.4.5 — 2026-11-05
