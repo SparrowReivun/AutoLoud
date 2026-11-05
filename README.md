@@ -4,8 +4,6 @@
 
 ### 让音量从反复调整，到始终舒适。
 
-**告别反复调整音量，从此您只需要享受声音。**
-
 *You adjust once. We handle the rest.*
 
 [简体中文](README.md) · [English](README.en.md) · [下载最新版本](https://github.com/SparrowReivun/AutoLoud/releases) · [反馈问题](https://github.com/SparrowReivun/AutoLoud/issues)
