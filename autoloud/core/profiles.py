@@ -123,6 +123,7 @@ class DeviceProfile:
     master_ref_db: float = -12.0
     genre: str = ""
     master_visible_in_loopback: bool = False
+    master_probed: bool = False  # the visibility probe ran once (automatically, the first time a boost is needed)
     music_fader: float = 0.0     # UI fader position, remembered for re-calibration (0 = bottom)
 
     def targets(self) -> Targets:

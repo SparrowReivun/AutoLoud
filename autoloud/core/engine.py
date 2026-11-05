@@ -999,6 +999,8 @@ class Engine:
         except Exception:
             lo, hi = -65.0, 0.0
         P = min(P, cfg.params.max_master_boost_db, max(0.0, hi - self.profile.master_ref_db))
+        if P > 2.0 and not self.profile.master_probed:
+            self._auto_probe_master()           # once per device: does the loopback see the master?
 
         # loopback-visible part of the gain that is NOT the controller's own,
         # peak-weighted over the active auto apps -> fed back to the controller
@@ -1115,6 +1117,31 @@ class Engine:
 
     def play(self, audio: np.ndarray, fs: int, gain_fn: Callable[[], float], loop: bool = True):
         return self.backend.play(self.device, audio, fs, gain_fn, loop)
+
+    def _auto_probe_master(self) -> None:
+        """The calibration wizard used to ask whether the master volume is inside
+        the loopback (software volume) or behind it (hardware volume); that
+        decides how a master boost is accounted for. Without a wizard, probe it
+        the first time a boost is actually needed on this device, while
+        something is playing: a 6 dB dip for ~1.6 s, then back. Once per device."""
+        if self.profile is None or self.profile.master_probed or self.config.monitor_only:
+            return
+        with self._reading_lock:
+            r = self._reading
+        if r is None or not r.has_signal or r.short_term <= r.gate_lufs:
+            return                              # nothing steady to measure against: try again later
+        self.profile.master_probed = True       # one attempt is all a user should ever hear
+        vis = None
+        try:
+            vis = self.probe_master_visibility()
+        except Exception:
+            log.exception("master visibility probe")
+        if vis is not None:
+            self.profile.master_visible_in_loopback = vis
+            if self.controller is not None:
+                self.controller.retune(self.profile.targets())
+        self._event("master_probe", visible=vis)
+        self._dirty = True
 
     def probe_master_visibility(self, wait: Callable[[float], None] = time.sleep,
                                 step_db: float = 6.0) -> bool | None:

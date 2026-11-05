@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.4.6 — 2026-11-05
+## Unreleased
+
+- The master-visibility probe the wizard used to run (is the Windows master inside the loopback?) now runs by itself, once per device, the first time a master boost of more than 2 dB is needed while something plays (a 6 dB dip for ~1.6 s). Needed for a low parked master (e.g. 25 %) where boosts become common.
+
+## Unreleased
 
 - No more calibration: the wizard, the "re-calibrate" button and the "not calibrated" badge are gone. A new device starts with the P of the device used last (−30 LUFS the very first time) and P is simply the dashboard slider.
 - P is shown as a percentage: 0 % = mute (−90 LUFS) … 100 % = 0 LUFS, linear in dB (1 % = 0.9 dB); the LUFS value is in the tooltip. Logs and the meters keep LUFS.
