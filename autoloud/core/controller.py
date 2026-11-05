@@ -457,15 +457,20 @@ class GainController:
         if self.phase in (Phase.ADJUST, Phase.STEADY, Phase.SAFETY) and r.has_signal:
             # trigger at B + margin; once cutting, keep correcting until the
             # level really sits at B + land (the momentary meter lags the jump)
+            # Relative to P, not T: with a source-tracking target T sits up to X under P in a
+            # quiet passage, and a game effect a few dB over P then counted as "sudden loudness"
+            # and got a 10 dB cut (49 cuts in one evening of 绝区零). What the user must be
+            # protected from is loudness far above what they chose - that is P + margin.
+            ref = max(self.t_lufs, self.targets.b_lufs)
             over = p.safety_margin_db if self.phase != Phase.SAFETY else p.safety_land_db + 1.0
-            excess = perceived_now - (self.t_lufs + over)
+            excess = perceived_now - (ref + over)
             settled = self.phase != Phase.SAFETY or (
                 self._ramp.done(now) and now - (self._safety_t or 0.0) > p.safety_ramp_s + 0.5)
             settled = settled and now >= self._safety_guard_until   # a B shift is still landing
             if excess > 0 and settled:   # momentary lags ~0.4 s: let the cut show before cutting again
                 # cut from the gain that is *sounding now* (not a ramp's end point)
                 # down to B + safety_land_db, fast
-                cut = perceived_now - (self.t_lufs + p.safety_land_db)
+                cut = perceived_now - (ref + p.safety_land_db)
                 self._ramp.retarget(now, self._clamp(g_now - cut), p.safety_ramp_s)
                 if self.phase != Phase.SAFETY:
                     safety_now = True

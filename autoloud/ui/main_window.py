@@ -292,7 +292,8 @@ class DashboardPage(QWidget):
     def _update_thr_label(self):
         m = self.engine.config.params.safety_margin_db
         ctl = self.engine.controller
-        self.thr_val.setText(f"T {m:+.1f} dB" + (f" = {ctl.t_lufs + m:.1f}" if ctl is not None else ""))
+        p = self.engine.profile
+        self.thr_val.setText(f"P {m:+.1f} dB" + (f" = {p.b_lufs + m:.1f}" if p is not None else ""))
 
     def refresh_devices(self):
         try:
