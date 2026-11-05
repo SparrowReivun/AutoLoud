@@ -112,6 +112,7 @@ _T = {
     "ev.safety": ("保护！瞬时 {perceived:.1f} LUFS，超阈值 {excess:.1f} dB → 压低 {cut:.1f} dB 到 {gain:+.1f} dB（落到 T+5）",
                   "Protection! momentary {perceived:.1f} LUFS, {excess:.1f} dB over → cut {cut:.1f} dB to {gain:+.1f} dB"),
     "ev.resume": ("保护压低已稳住，从 {gain:+.1f} dB 回到正常规则", "Protection cut landed, normal rules resume from {gain:+.1f} dB"),
+    "ev.session_caught": ("{app} 刚建立会话：在它出声前已设为 {db:+.1f} dB，淡入", "{app} opened a session: set to {db:+.1f} dB before its first sound, fading in"),
     "ev.new_work_fade": ("新作品：从记忆增益低 {fade:.0f} dB 处淡入到 {gain:+.1f} dB（{dur:.1f} s）", "New work: fading in from {fade:.0f} dB under to {gain:+.1f} dB ({dur:.1f} s)"),
     "ev.new_work": ("新作品：{mode} → 增益 {gain:+.1f} dB，开始听", "New work: {mode} → gain {gain:+.1f} dB, listening"),
     "ev.b_shift": ("你把 P 调到 {b:.1f} LUFS（{delta:+.1f}）→ 一步平滑到 {gain:+.1f} dB（{dur:.0f} s），期间不触发保护", "You set P to {b:.1f} LUFS ({delta:+.1f}) → one smooth move to {gain:+.1f} dB ({dur:.0f} s), protection held off"),

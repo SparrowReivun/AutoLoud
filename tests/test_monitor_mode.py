@@ -1,5 +1,5 @@
 """Monitor only: no automatic decision is made or recorded; leaving it starts clean."""
-import os, time
+import os, time, math
 
 os.environ.setdefault("XDG_CONFIG_HOME", "/tmp/autoloud-test-cfg-mon")
 
@@ -81,3 +81,24 @@ def test_autostart_is_a_no_op_off_windows():
         return
     assert not autostart.available() and not autostart.enabled() and not autostart.set_enabled(True)
     assert "run.py" in autostart.command() or "AutoLoud" in autostart.command()
+
+
+def test_a_new_session_is_set_before_its_first_sound():
+    """Windows' OnSessionCreated (simulated by the mock) must answer with the fade start."""
+    cfg = AppConfig(); cfg.ensure_presets(); cfg.params.listen_s = 1.0; cfg.startup_master_percent = 0
+    be = MockBackend(); be.add_tone_source("music.exe", lufs_amp=0.05)
+    eng = Engine(be, cfg); eng.profile = None
+    eng.start(be.list_output_devices()[0])
+    try:
+        time.sleep(4.0)
+        g = eng.state.command.total_db
+        src = be.add_tone_source("ding.exe", lufs_amp=0.3, freq=880.0)
+        v = src.volume
+        want_db = min(0.0, g) - cfg.params.new_work_fade_db
+        assert v < 0.999 and abs(20 * math.log10(v) - want_db) < 1.0, (v, want_db)
+        time.sleep(cfg.params.new_work_fade_s + 1.0)
+        assert any(k == "session_caught" for _, k, _ in eng.state.events)
+        v2 = src.volume
+        assert 20 * math.log10(max(v2, 1e-6)) > want_db + cfg.params.new_work_fade_db * 0.7   # it rose
+    finally:
+        eng.stop()

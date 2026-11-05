@@ -157,6 +157,11 @@ class Engine:
         self.meter = StreamingLoudnessMeter(fs, ch, integration_window_s=60.0)
         self._last_audio_t = time.perf_counter()
         self.controller = GainController(self.profile.targets(), self.config.params)
+        if hasattr(self.backend, "start_session_watch"):
+            try:
+                self.backend.start_session_watch(device, self._on_session_created)
+            except Exception:
+                log.exception("session watch")
         self._applied_session_db.clear()
         self._applied_master_db = None
         self._sessions_parked = False
@@ -177,6 +182,11 @@ class Engine:
             self.backend.stop_capture()
         except Exception:
             pass
+        if hasattr(self.backend, "stop_session_watch"):
+            try:
+                self.backend.stop_session_watch()
+            except Exception:
+                pass
         if restore:
             self._restore_volumes(leaving=True)
         else:
@@ -1148,6 +1158,39 @@ class Engine:
 
     def play(self, audio: np.ndarray, fs: int, gain_fn: Callable[[], float], loop: bool = True):
         return self.backend.play(self.device, audio, fs, gain_fn, loop)
+
+    def _on_session_created(self, key: str, name: str, pid: int):
+        """Windows just created a session (new player / tab / notification) and
+        tells us before it plays. Answer with the volume it should start at:
+        its bus gain (or fader) minus the fade-in depth; the normal poll then
+        rises it like any new session. Runs on Windows' callback thread."""
+        try:
+            if not self._running or self.config.monitor_only or self._calibrating or self.profile is None:
+                return None
+            if name in self.SYSTEM_APPS or pid == os.getpid():
+                return None
+            cfg = self.config
+            cmd = self._last_cmd
+            mix = cfg.apps.get(name)
+            fader = mix.offset_db if mix is not None else 0.0
+            G = cmd.total_db if cmd is not None else 0.0
+            boost = cmd.master_offset_db if cmd is not None else 0.0
+            desired = (G if self._follows_bus(name) else 0.0) + fader - self._app_cut.get(name, 0.0)
+            db = min(0.0, desired - boost)
+            p = cfg.params
+            now = time.perf_counter()
+            if p.new_work_fade_db > 0 and p.new_work_fade_s > 0:
+                fades = getattr(self, "_session_fade", None)
+                if fades is None:
+                    fades = self._session_fade = {}
+                fades[key] = now
+                db = max(-120.0, db - p.new_work_fade_db)
+            self._applied_session_db[key] = db       # the poll continues the fade, not a fresh one
+            self._event("session_caught", app=cfg.display_name(name), db=db)
+            return 0.0 if db <= -119.9 else 10 ** (db / 20)
+        except Exception:
+            log.exception("session created handler")
+            return None
 
     def _auto_probe_master(self) -> None:
         """The calibration wizard used to ask whether the master volume is inside

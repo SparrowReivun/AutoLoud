@@ -33,7 +33,8 @@ from pycaw.pycaw import (  # type: ignore
 from pycaw.constants import AudioSessionState  # type: ignore
 from pycaw.api.mmdeviceapi.depend.structures import PROPERTYKEY  # type: ignore
 from pycaw.api.mmdeviceapi import IMMDevice  # type: ignore
-from pycaw.api.audiopolicy import IAudioSessionControl  # type: ignore
+from pycaw.api.audiopolicy import IAudioSessionControl, IAudioSessionNotification  # type: ignore
+from comtypes import COMObject  # type: ignore
 from comtypes import GUID  # type: ignore
 
 BACKEND_VERSION = "0.9-session-manager-lifetime"
@@ -212,6 +213,33 @@ class _ComWorker:
     def stop(self):
         self._q.put(None)
         self._t.join(timeout=2.0)
+
+
+class _SessionCreated(COMObject):
+    """IAudioSessionNotification: Windows calls OnSessionCreated the moment an
+    app opens a new audio session - before it has played a single buffer. The
+    handler returns the volume scalar the session should start at (or None),
+    and it is applied right here, on Windows' own callback thread, so the
+    session never plays at 100 % while we wait for the next poll."""
+    _com_interfaces_ = (IAudioSessionNotification,)
+
+    def __init__(self, backend: "WindowsBackend", handler):
+        super().__init__()
+        self._backend = backend
+        self._handler = handler
+
+    def OnSessionCreated(self, new_session):
+        try:
+            ctl2 = new_session.QueryInterface(IAudioSessionControl2)
+            pid = int(ctl2.GetProcessId())
+            name = self._backend._process_name(pid, ctl2)
+            scalar = self._handler(f"{pid}:{name}", name, pid)
+            if scalar is not None:
+                vol = new_session.QueryInterface(ISimpleAudioVolume)
+                vol.SetMasterVolume(float(max(0.0, min(1.0, scalar))), None)
+        except Exception:
+            log.exception("session created callback")
+        return 0
 
 
 class WindowsBackend:
@@ -446,6 +474,44 @@ class WindowsBackend:
 
     def list_sessions(self, device: OutputDevice) -> list[AudioSession]:
         return self._com.call(lambda: self._list_sessions(device))
+
+    # ------------------------------------------------------------------
+    # new-session notifications (see _SessionCreated)
+    _watch: tuple | None = None       # (device id, manager, callback object)
+
+    def start_session_watch(self, device: OutputDevice, handler) -> bool:
+        """Call ``handler(key, name, pid) -> scalar | None`` the instant a new
+        session appears on ``device`` and apply the scalar to it at once."""
+        def f():
+            self._stop_watch()
+            mgr = self._session_manager(device)          # a long-lived manager of its own
+            cb = _SessionCreated(self, handler)
+            mgr.RegisterSessionNotification(cb)
+            mgr.GetSessionEnumerator()                   # Windows only starts notifying after one enumeration
+            self._watch = (device.id, mgr, cb)
+            log.info("session watch on %s", device.name)
+            return True
+        try:
+            return bool(self._com.call(f))
+        except Exception:
+            log.exception("session watch")
+            return False
+
+    def _stop_watch(self) -> None:
+        w = self._watch
+        self._watch = None
+        if w is None:
+            return
+        try:
+            w[1].UnregisterSessionNotification(w[2])
+        except Exception:
+            pass
+
+    def stop_session_watch(self) -> None:
+        try:
+            self._com.call(self._stop_watch)
+        except Exception:
+            pass
 
     def _list_sessions(self, device: OutputDevice) -> list[AudioSession]:
         result: list[AudioSession] = []

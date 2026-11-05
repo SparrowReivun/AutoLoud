@@ -110,6 +110,14 @@ class MockBackend:
         s = _Source(key, name, audio, loop, gain_fn, is_self)
         with self._lock:
             self._sources[key] = s
+        h = getattr(self, "_session_handler", None)
+        if h is not None and not is_self:
+            try:
+                sc = h(key, name, int(key.split(":")[0]))
+                if sc is not None:
+                    s.volume = float(sc)
+            except Exception:
+                pass
         return s
 
     def add_file_source(self, path: str | Path, name: str | None = None, loop=True):
@@ -179,6 +187,13 @@ class MockBackend:
         self._thread = threading.Thread(target=run, daemon=True, name="mock-capture")
         self._thread.start()
         return FS, CH
+
+    def start_session_watch(self, device, handler) -> bool:
+        self._session_handler = handler          # add_tone_source calls it like Windows would
+        return True
+
+    def stop_session_watch(self) -> None:
+        self._session_handler = None
 
     def set_default_output(self, device) -> bool:
         self._default_id = device.id
