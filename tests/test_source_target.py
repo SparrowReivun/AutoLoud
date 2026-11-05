@@ -156,9 +156,9 @@ def test_builtin_presets_follow_author_tuning():
     from autoloud.core.profiles import AppConfig
     p = AppConfig.builtin_preset("强力1")
     assert p["target_mode"] == "source" and p["source_range_db"] == 11.0
-    assert p["safety_margin_db"] == 17.5 and p["deadband_up_db"] == 0.5 and p["deadband_down_db"] == 0.5
+    assert p["safety_margin_db"] == 14.0 and p["deadband_up_db"] == 0.5 and p["deadband_down_db"] == 0.5
     c = AppConfig()
-    assert c.exit_master_percent == 40.0 and c.startup_master_percent == 80.0
+    assert c.exit_master_percent == 40.0 and c.startup_master_percent == 70.0
     assert c.volume_key_step_db == 0.4 and c.mixer_range_db == 40.0
 
 

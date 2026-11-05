@@ -50,6 +50,7 @@ _T = {
     "ev.autostart_off": ("已取消开机自动启动", "Will no longer start with Windows"),
     "ev.autostart_failed": ("开机自启动设置失败（看 autoloud.log）", "Could not change the start-with-Windows setting (see autoloud.log)"),
     "ev.master_probe": ("首次需要提升：探测了主音量是否在回录里（{visible}）", "First boost needed: probed whether the master volume is inside the loopback ({visible})"),
+    "ev.work_brief": ("{app} 刚盖过主声不到 5 秒就换了作品：按插入声处理，总线增益不动", "{app} took over the mix less than 5 s ago: treated as an intrusion, bus gain left alone"),
     "ev.work_behind": ("{app} 换了作品，但 {loud} 才是主声：总线增益不动", "{app} changed work behind {loud}, which dominates the mix: bus gain left alone"),
     "ev.logs_rotated": ("切换了模式：新开一组日志文件（…-{mode}）", "Mode changed: a fresh set of log files (…-{mode})"),
     "ev.monitor_on": ("仅监测：所有会话放回 100%，之后不再调整任何音量（设置、推子、预设都保留）", "Monitor only: every session back to 100 %, no volume is touched from now on (settings, faders and presets are kept)"),

@@ -153,7 +153,7 @@ class AppConfig:
     music_dir: str = ""           # folder with <genre>/*.wav|mp3|flac for calibration
     start_minimized: bool = False
     sidebar_collapsed: bool = False
-    startup_master_percent: float = 80.0   # set the Windows master volume to this on start (0 = leave it); restored on exit.
+    startup_master_percent: float = 70.0   # set the Windows master volume to this on start (0 = leave it); restored on exit.
                                            # Not 100: a volume-up press behind the hook (elevated game in front) must still move the master so it can be read
     presets: dict[str, dict] = field(default_factory=dict)   # name -> ControllerParams as a dict
     active_preset: str = ""
@@ -271,7 +271,7 @@ class AppConfig:
                    steady_under_db=-15.0, safety_margin_db=12.0, safety_land_db=5.0, move_ramp_s=0.2),
         "强力1": dict(onset_below_b_db=7.0, step_up_db=0.5, step_down_db=1.0, deadband_up_db=0.5, deadband_down_db=0.5,
                     snap_db=1.0, steady_trigger_db=2.5, steady_over_blocks=2, steady_under_db=-4.0, steady_under_blocks=3,
-                    safety_margin_db=17.5, safety_land_db=4.0, move_ramp_s=0.4, work_silence_s=10.0,
+                    safety_margin_db=14.0, safety_land_db=4.0, move_ramp_s=0.4, work_silence_s=10.0,
                     max_master_boost_db=38.0, target_mode="source", source_range_db=11.0, source_hold_s=60.0),
     }
 
@@ -361,14 +361,14 @@ class AppConfig:
     # Mixer fader a newly seen app starts at (dB). Windows system sounds (pid 0:
     # notification / error dings) are far louder than anything else at a quiet
     # listening level, so they start well down.
-    DEFAULT_APP_OFFSETS: ClassVar[dict] = {"System sounds": -40.0}
+    DEFAULT_APP_OFFSETS: ClassVar[dict] = {"System sounds": -5.0, "Weixin.exe": -5.0, "SystemSettings.exe": -5.0}
 
     def mix_for(self, app_name: str) -> AppMix:
         if app_name not in self.apps:
             self.apps[app_name] = AppMix(offset_db=self.DEFAULT_APP_OFFSETS.get(app_name, 0.0))
         return self.apps[app_name]
 
-    DEFAULT_P_LUFS = -30.0        # a never-seen device starts here (the slider is the whole "calibration")
+    DEFAULT_P_LUFS = -42.0        # a never-seen device starts here (the author's level) (the slider is the whole "calibration")
 
     def profile_for(self, device_id: str, device_name: str) -> DeviceProfile:
         """A device's profile; a new device inherits P from the device used last

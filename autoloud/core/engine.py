@@ -55,6 +55,7 @@ B_MUTE_LUFS = -90.0   # the P slider's bottom: auto apps are muted outright
 
 class Engine:
     CONTROL_HZ = 50
+    DOMINANT_MIN_S = 5.0    # an app must have led the mix this long before its gain is remembered or a new work of it re-targets the bus
     SESSION_POLL_S = 0.25   # a session Windows just created plays at 100 % until the next poll: keep that short
 
     def __init__(self, backend: Backend, config: AppConfig):
@@ -78,6 +79,9 @@ class Engine:
         self._applied_master_db: float | None = None
         self._known_active: set[str] = set()
         self._extra_visible_db = 0.0                   # mixer gain the loopback contains
+        self._dom_name: str | None = None               # app leading the mix, and since when
+        self._dom_since: float = 0.0
+        self._dom_prev: tuple[str, float] | None = None
         self._auto_share_db = 0.0                      # 10*log10(power share of auto apps)
         self._holds: dict[str, float] = {}             # app -> bus gain frozen by a manual fader move
         self._duty: dict[str, deque] = {}              # app -> (t, sounding) samples while active (tool detector)
@@ -321,6 +325,12 @@ class Engine:
                         if s_.name in self.config.DEFAULT_APP_OFFSETS and s_.name not in self.config.apps:
                             self.config.mix_for(s_.name); self._dirty = True
                     self._last_sessions = sessions
+                    dom_now = self._dominant(sessions)
+                    if dom_now is None or dom_now.name != getattr(self, "_dom_name", None):
+                        if getattr(self, "_dom_name", None) is not None:
+                            self._dom_prev = (self._dom_name, now)       # who led until just now
+                        self._dom_name = dom_now.name if dom_now is not None else None
+                        self._dom_since = now
                     if self.meter_log is not None:
                         sole, sm, ss = self.source_loudness(sessions, r, self._last_cmd)
                         self.meter_log.apps(sessions, self._last_cmd.total_db if self._last_cmd else 0.0,
@@ -365,6 +375,12 @@ class Engine:
                             self._event("work_behind", app=self.config.display_name(app_name),
                                         loud=self.config.display_name(dom.name))
                             continue
+                        # ... and one that has led the mix for a while: a notification ding that
+                        # dominates for one second is an intrusion (cut on that app), not a new work
+                        if dom is not None and dom.name == app_name and now - self._dom_since < self.DOMINANT_MIN_S \
+                                and self._dominant_before(app_name, now):
+                            self._event("work_brief", app=self.config.display_name(app_name))
+                            continue
                         if self.controller is not None and self.config.enabled and self._follows_bus(app_name):
                             mix = self.config.mix_for(app_name)
                             self.controller.notify_new_work(now, self.meter, mix.last_gain_db)
@@ -373,12 +389,15 @@ class Engine:
                     clean = (self._last_cmd is not None and self.config.enabled and not self.config.monitor_only and (
                         self._last_cmd.phase.value == "steady" or
                         (self._last_cmd.phase.value == "adjust" and now - self._last_safety_t > 20.0)))
-                    if clean:                      # never a gain still bent by a protection cut
-                        for name in auto_active:
-                            mix = self.config.mix_for(name)
-                            if mix.last_gain_db is None or abs(mix.last_gain_db - self._last_cmd.total_db) > 0.25:
-                                mix.last_gain_db = round(self._last_cmd.total_db, 2)
-                                self._dirty = True
+                    # ... but only the app that has LED the mix for DOMINANT_MIN_S: a session that
+                    # merely exists (WeChat's, always open) used to copy whatever gain the music had,
+                    # and a one-second notification never has a gain of its own to remember
+                    lead = self._dom_name if (self._dom_name is not None and now - self._dom_since >= self.DOMINANT_MIN_S) else None
+                    if clean and lead is not None and lead in auto_active:
+                        mix = self.config.mix_for(lead)
+                        if mix.last_gain_db is None or abs(mix.last_gain_db - self._last_cmd.total_db) > 0.25:
+                            mix.last_gain_db = round(self._last_cmd.total_db, 2)
+                            self._dirty = True
                     try:
                         master_db = self.backend.get_master_db(self.device)
                     except Exception:
@@ -574,6 +593,12 @@ class Engine:
 
     DOMINANT_RATIO = 0.3     # others must stay ~10 dB under the loudest (after session volumes) to be ignored
                              # (a -10 dB second source moves the mix loudness by < 0.5 dB)
+
+    def _dominant_before(self, app_name: str, now: float) -> bool:
+        """Was some OTHER app leading the mix just before ``app_name`` took over?
+        (Then a brief take-over is an intrusion; from silence it is a real start.)"""
+        prev = getattr(self, "_dom_prev", None)
+        return prev is not None and prev[0] != app_name and now - prev[1] < 3.0
 
     def _dominant(self, sessions: list[AudioSession]) -> AudioSession | None:
         """The one app that is effectively alone in the loopback: the loudest
