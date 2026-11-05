@@ -14,15 +14,7 @@ from autoloud.core.controller import Phase
 from autoloud.ui import theme
 from autoloud.ui.i18n import t, set_language
 from autoloud.ui.widgets import LoudnessBar, Card, badge, NoWheelSlider
-
-
-def p_pct(lufs: float) -> float:
-    """P as the user sees it: 0 % = -90 LUFS (mute) ... 100 % = 0 LUFS, linear in dB."""
-    return max(0.0, min(100.0, (lufs + 90.0) / 90.0 * 100.0))
-
-
-def p_text(lufs: float) -> str:
-    return t("dash.b.mute") if lufs <= -89.95 else f"{p_pct(lufs):.0f} %"
+from autoloud.ui.calibration import CalibrationWizard
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +36,7 @@ def make_icon(color: str = theme.ACCENT) -> QIcon:
 
 # ----------------------------------------------------------------------
 class DashboardPage(QWidget):
-    def __init__(self, engine: Engine):
+    def __init__(self, engine: Engine, on_calibrate):
         super().__init__()
         self.engine = engine
         lay = QVBoxLayout(self)
@@ -73,9 +65,16 @@ class DashboardPage(QWidget):
         lay.addLayout(top)
 
         self.status = badge(t("status.idle"))
+        self.uncal = QLabel(t("status.uncal"))
+        self.uncal.setStyleSheet(f"color:{theme.WARN}")
         srow = QHBoxLayout()
         srow.addWidget(self.status)
+        srow.addWidget(self.uncal)
         srow.addStretch(1)
+        self.cal_btn = QPushButton(t("recal"))
+        self.cal_btn.setObjectName("primary")
+        self.cal_btn.clicked.connect(on_calibrate)
+        srow.addWidget(self.cal_btn)
         lay.addLayout(srow)
 
         # comfort level B as a knob: where you leave it is the new target
@@ -266,7 +265,7 @@ class DashboardPage(QWidget):
         before = self.engine.profile.b_lufs if self.engine.profile is not None else v / 10.0
         self.engine.set_target_b(v / 10.0)
         self.engine._log_volume("p_slider", v / 10.0 - before)
-        self.b_val.setText(p_text(v / 10.0)); self.b_val.setToolTip(f"{v / 10.0:.1f} LUFS")
+        self.b_val.setText(t("dash.b.mute") if v <= -900 else f"{v / 10.0:.1f} LUFS")
 
     def _set_slider_role(self, master: bool):
         """Monitor only: the comfort slider becomes a plain Windows master volume control."""
@@ -341,17 +340,19 @@ class DashboardPage(QWidget):
             v = int(round(p.b_lufs * 10))
             if v != self.b_slider.value():
                 self.b_slider.blockSignals(True); self.b_slider.setValue(v); self.b_slider.blockSignals(False)
-            self.b_val.setText(p_text(p.b_lufs)); self.b_val.setToolTip(f"{p.b_lufs:.1f} LUFS")
+            self.b_val.setText(t("dash.b.mute") if p.b_lufs <= -89.95 else f"{p.b_lufs:.1f} LUFS")
         mv = int(round(self.engine.config.params.safety_margin_db * 2))
         if mv != self.thr_slider.value() and not self.thr_slider.isSliderDown():
             self.thr_slider.blockSignals(True); self.thr_slider.setValue(mv); self.thr_slider.blockSignals(False)
         self._update_thr_label()
-        if p is not None:
+        if p is not None and p.calibrated:
             for m in (self.m_mom, self.m_st, self.m_int):
                 m.set_marker("P", p.b_lufs, theme.ACCENT)
-            self.prof_lbl.setText(f"{t('b')} = {p_pct(p.b_lufs):.0f} % ({p.b_lufs:.1f} LUFS) · "
-                                  f"master ref = {p.master_ref_db:+.1f} dB")
+            self.prof_lbl.setText(f"{t('b')} = {p.b_lufs:.1f} LUFS · "
+                                  f"master ref = {p.master_ref_db:+.1f} dB · {t('genre')}: {p.genre or '—'}")
+            self.uncal.hide()
         else:
+            self.uncal.show()
             self.prof_lbl.setText("—")
         c = s.command
         if c is not None:
@@ -813,7 +814,7 @@ class MainWindow(QMainWindow):
         nl.addLayout(head)
         nl.addSpacing(10)
         self.stack = QStackedWidget()
-        self.dash = DashboardPage(engine)
+        self.dash = DashboardPage(engine, self.run_calibration)
         self.apps = AppsPage(engine)
         self.settings = SettingsPage(engine)
         self.nav_btns = []
@@ -891,6 +892,8 @@ class MainWindow(QMainWindow):
     def start(self):
         self.engine.start()
         self.dash.refresh_devices()
+        if self.engine.profile is not None and not self.engine.profile.calibrated:
+            QTimer.singleShot(400, self.run_calibration)
 
     def _on_state(self, s: EngineState):
         self._latest = s
@@ -915,7 +918,17 @@ class MainWindow(QMainWindow):
                     self.engine._event("default_device", name=d.name, ok=ok)
                     QTimer.singleShot(800, self.dash.refresh_devices)   # the ★ moves
                 self.engine.config.save()
+                if not self.engine.profile.calibrated:
+                    QTimer.singleShot(200, self.run_calibration)
                 break
+
+    def run_calibration(self):
+        if self.engine.device is None:
+            return
+        wiz = CalibrationWizard(self.engine, self.engine.config.music_dir, self)
+        wiz.setStyleSheet(theme.QSS)
+        if wiz.exec() == QDialog.Accepted:
+            self.engine.config.save()
 
     def closeEvent(self, ev):
         if self._quitting or not QSystemTrayIcon.isSystemTrayAvailable():
