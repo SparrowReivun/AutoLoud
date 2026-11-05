@@ -36,7 +36,7 @@ from pycaw.api.mmdeviceapi import IMMDevice  # type: ignore
 from pycaw.api.audiopolicy import IAudioSessionControl  # type: ignore
 from comtypes import GUID  # type: ignore
 
-BACKEND_VERSION = "0.8-freestrings"
+BACKEND_VERSION = "0.9-session-manager-lifetime"
 
 # ---- IPolicyConfig (undocumented, what the Sound control panel uses to set the default device) ----
 from ctypes import c_void_p, c_longlong, POINTER as _PTR  # noqa: E402
@@ -225,7 +225,6 @@ class WindowsBackend:
         # --- everything below is touched ONLY on the COM worker thread ---
         self._session_cache: dict[str, dict] = {}      # key -> {session instance: ISimpleAudioVolume}
         self._endpoint_cache: dict[str, object] = {}   # device id -> IAudioEndpointVolume
-        self._mgr_cache: dict[str, object] = {}        # device id -> IAudioSessionManager2
         self._meter_cache: dict[str, object] = {}      # session instance -> IAudioMeterInformation
         self._com = _ComWorker(on_restart=self._drop_caches)
 
@@ -233,7 +232,6 @@ class WindowsBackend:
         # the old COM objects belong to the abandoned thread: never touch them again
         self._session_cache = {}
         self._endpoint_cache = {}
-        self._mgr_cache = {}
         self._meter_cache = {}
 
     def thread_init(self) -> None:
@@ -407,7 +405,7 @@ class WindowsBackend:
         if ep is None:
             dev = self._get_imm_device(device.id)
             iface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            ep = comtypes.cast(iface, comtypes.POINTER(IAudioEndpointVolume))
+            ep = iface.QueryInterface(IAudioEndpointVolume)
             self._endpoint_cache[device.id] = ep
         return ep
 
@@ -436,13 +434,15 @@ class WindowsBackend:
     # ------------------------------------------------------------------
     # sessions
     def _session_manager(self, device: OutputDevice):
-        mgr = self._mgr_cache.get(device.id)
-        if mgr is None:
-            dev = self._get_imm_device(device.id)
-            iface = dev.Activate(IAudioSessionManager2._iid_, CLSCTX_ALL, None)
-            mgr = comtypes.cast(iface, comtypes.POINTER(IAudioSessionManager2))
-            self._mgr_cache[device.id] = mgr
-        return mgr
+        # Keep the manager local to one enumeration. On Windows 11, repeatedly
+        # calling GetSessionEnumerator on a long-lived manager retained about
+        # 3 KiB per poll even after releasing each enumerator. Releasing the
+        # manager after each poll bounds those native allocations.
+        dev = self._get_imm_device(device.id)
+        iface = dev.Activate(IAudioSessionManager2._iid_, CLSCTX_ALL, None)
+        # Activate is declared as returning IUnknown by pycaw. QueryInterface
+        # gives this pointer its own COM reference; a ctypes cast does not.
+        return iface.QueryInterface(IAudioSessionManager2)
 
     def list_sessions(self, device: OutputDevice) -> list[AudioSession]:
         return self._com.call(lambda: self._list_sessions(device))
@@ -508,7 +508,6 @@ class WindowsBackend:
             self._meter_cache = new_meters
         except Exception as e:  # pragma: no cover
             log.exception("list_sessions failed: %s", e)
-            self._mgr_cache.pop(device.id, None)
         return result
 
     @staticmethod
@@ -566,7 +565,6 @@ class WindowsBackend:
         def release():
             self._session_cache.clear()
             self._endpoint_cache.clear()
-            self._mgr_cache.clear()
             self._meter_cache.clear()
         try:
             self._com.call(release)
