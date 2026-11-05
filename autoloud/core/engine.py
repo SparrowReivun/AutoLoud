@@ -307,6 +307,9 @@ class Engine:
                 if now >= next_poll:
                     next_poll = now + self.SESSION_POLL_S
                     sessions = self.backend.list_sessions(self.device)
+                    for s_ in sessions:            # apps with a default fader (System sounds) get it on first sight
+                        if s_.name in self.config.DEFAULT_APP_OFFSETS and s_.name not in self.config.apps:
+                            self.config.mix_for(s_.name); self._dirty = True
                     self._last_sessions = sessions
                     if self.meter_log is not None:
                         sole, sm, ss = self.source_loudness(sessions, r, self._last_cmd)

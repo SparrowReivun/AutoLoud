@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Mixer: "System sounds" (Windows notification / error dings, pid 0) now starts with its fader at −40 dB instead of 0 dB: at a quiet listening level an unattenuated ding is far louder than the content. The entry is created as soon as the session is seen, so the default applies even before the mixer page is opened. Existing configs: a System sounds fader still at 0 dB is moved to −40 dB once (presets_version 8); any other value the user set is kept.
+
 ## 0.4.5 — 2026-11-05
 
 - Fix runaway P changes after a Windows master-volume move when startup master parking is disabled: the same unacknowledged master delta was converted into a new volume-key step on every session poll (seen 2026-11-05 09:19:42–09:22:48). Restore the previous master level even without scalar parking, acknowledge each observed move once, and use actual driver readback rather than requested dB as the external-change baseline. Driver rounding and failed restores no longer create repeated preference changes.

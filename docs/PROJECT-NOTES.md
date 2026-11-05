@@ -33,6 +33,7 @@ AutoLoud 是 Windows 上的自动响度均衡器：监听系统回录（WASAPI l
 - **强力1**（作者日常使用、新装默认）：源跟踪目标 + 平台学习 + 前奏不抬升（源低于 C_low 6 LU 以上不升）+ 新作品直接进稳定态 + 比例步长（远离 T 时每步至少补一半误差）。
 - **参数以作者本机为准**。作者说「同步参数」时：读本机 `config.json` 的 `presets`，把差异写进 `autoloud/core/profiles.py` 的 `BUILTIN_PRESETS`，更新 `tests/test_source_target.py` 的预期值和 CHANGELOG。已有用户的预设不会被覆盖，只影响新装。
 - 其它由本机决定的默认：启动主音量 80%、退出/崩溃主音量 40%、音量键步长 0.4 dB、默认设备同步开、推子范围 +40 dB（0.4.3 起与作者本机一致）。
+- 混音台默认推子：`AppConfig.DEFAULT_APP_OFFSETS`（目前 System sounds = −40 dB），首次见到该会话即建条目。
 
 ## 4. 代码地图
 

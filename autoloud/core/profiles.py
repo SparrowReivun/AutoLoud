@@ -137,7 +137,7 @@ class AppConfig:
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
     memory_version: int = 2       # bump to forget every app's remembered gain once
-    presets_version: int = 7      # bump to add new built-in presets once (2: 强力1; 3: steady triggers; 4/5/6: startup master -> 80 %, key step 0.5; 7: exit master 1 %)
+    presets_version: int = 8      # bump to add new built-in presets once (2: 强力1; 3: steady triggers; 4/5/6: startup master -> 80 %, key step 0.5; 7: exit master 1 %; 8: System sounds fader -40 dB)
     mixer_range_db: float = 40.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
 
@@ -193,6 +193,11 @@ class AppConfig:
             for k, v in raw.get("profiles", {}).items():
                 cfg.profiles[k] = DeviceProfile(**{kk: vv for kk, vv in v.items()
                                                    if kk in DeviceProfile.__dataclass_fields__})
+            if int(raw.get("presets_version", 1)) < 8:
+                for name, off in cls.DEFAULT_APP_OFFSETS.items():   # once: a fader still at 0 dB gets the default
+                    m = cfg.apps.get(name)
+                    if m is not None and m.offset_db == 0.0:
+                        m.offset_db = off
             cfg.ensure_presets()
             cfg.migrate_presets(int(raw.get("presets_version", 1)), strong_apps)
             return cfg
@@ -324,9 +329,14 @@ class AppConfig:
         m = self.apps.get(app_name)
         return (m.alias.strip() if m and m.alias.strip() else app_name)
 
+    # Mixer fader a newly seen app starts at (dB). Windows system sounds (pid 0:
+    # notification / error dings) are far louder than anything else at a quiet
+    # listening level, so they start well down.
+    DEFAULT_APP_OFFSETS: ClassVar[dict] = {"System sounds": -40.0}
+
     def mix_for(self, app_name: str) -> AppMix:
         if app_name not in self.apps:
-            self.apps[app_name] = AppMix()
+            self.apps[app_name] = AppMix(offset_db=self.DEFAULT_APP_OFFSETS.get(app_name, 0.0))
         return self.apps[app_name]
 
     def profile_for(self, device_id: str, device_name: str) -> DeviceProfile:

@@ -47,3 +47,34 @@ def test_meter_drops_garbage_blocks_and_starts_clean():
     for _ in range(50):
         m.process(rng.standard_normal((960, 2)) * 0.05)
     assert abs(m.reading().short_term - before) < 1.0   # back to the same level, no ringing
+
+
+def test_system_sounds_fader_defaults_to_minus_40():
+    import json
+    from autoloud.core.profiles import AppConfig
+    c = AppConfig()
+    assert c.mix_for("System sounds").offset_db == -40.0
+    assert c.mix_for("chrome.exe").offset_db == 0.0
+    # existing config from before: a System sounds fader still at 0 dB moves once, a user value stays
+    for before, after in ((0.0, -40.0), (-12.0, -12.0)):
+        raw = {"presets_version": 7, "apps": {"System sounds": {"offset_db": before}}}
+        AppConfig.path().write_text(json.dumps(raw), encoding="utf-8")
+        assert AppConfig.load().apps["System sounds"].offset_db == after
+    raw = {"presets_version": 8, "apps": {"System sounds": {"offset_db": 0.0}}}   # already migrated: user's 0 stays
+    AppConfig.path().write_text(json.dumps(raw), encoding="utf-8")
+    assert AppConfig.load().apps["System sounds"].offset_db == 0.0
+
+
+def test_engine_gives_system_sounds_its_default_fader():
+    cfg = AppConfig()
+    be = MockBackend()
+    be.add_tone_source("System sounds", lufs_amp=0.0)
+    eng = Engine(be, cfg)
+    eng.start(be.list_output_devices()[0])
+    try:
+        t0 = time.time()
+        while time.time() - t0 < 5.0 and "System sounds" not in cfg.apps:
+            time.sleep(0.1)
+        assert cfg.apps["System sounds"].offset_db == -40.0
+    finally:
+        eng.stop()
