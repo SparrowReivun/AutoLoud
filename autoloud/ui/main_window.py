@@ -197,6 +197,8 @@ class DashboardPage(QWidget):
         d = dict(d)
         if kind == "new_work":
             d["mode"] = t("ev.mode." + d.get("mode", "mixed"))
+            if "fade" in d:
+                return t("ev.new_work_fade").format(**d)
         if kind == "default_device":
             d["ok"] = t("ev.ok") if d.get("ok") else t("ev.failed")
         if kind == "work":
@@ -618,6 +620,8 @@ class SettingsPage(QWidget):
             ("source_range_db", "set.source_range", 0, 20, 0.5),
             ("source_hold_s", "set.source_hold", 5, 600, 5),
             ("intro_below_platform_db", "set.intro_below", 0, 30, 1),
+            ("new_work_fade_db", "set.fade_db", 0, 40, 1),
+            ("new_work_fade_s", "set.fade_s", 0, 5, 0.1),
         ]:
             sp = QDoubleSpinBox(); sp.setRange(lo, hi); sp.setSingleStep(step); sp.setValue(getattr(P, key))
             form.addRow(t(label), sp)

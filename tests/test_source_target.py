@@ -130,7 +130,7 @@ def test_intro_far_under_the_quiet_platform_is_not_raised():
 def test_new_work_starts_steady_when_configured():
     from autoloud.core.controller import Phase
     for flag, want in ((True, Phase.STEADY), (False, Phase.ADJUST)):
-        c = GainController(Targets(b_lufs=-25.0), ControllerParams(new_work_steady=flag))
+        c = GainController(Targets(b_lufs=-25.0), ControllerParams(new_work_steady=flag, new_work_fade_db=0.0))
         c.phase = Phase.STEADY; c._last_signal_t = 0.0
         c.notify_new_work(1.0, None, -12.0)
         assert c.phase == want and abs(c.gain_db + 12.0) < 1e-6
@@ -160,3 +160,19 @@ def test_builtin_presets_follow_author_tuning():
     c = AppConfig()
     assert c.exit_master_percent == 40.0 and c.startup_master_percent == 80.0
     assert c.volume_key_step_db == 0.4 and c.mixer_range_db == 40.0
+
+
+def test_new_work_fades_in_from_under_the_remembered_gain():
+    from autoloud.core.controller import Phase
+    from autoloud.dsp.loudness import LoudnessReading
+    c = GainController(Targets(b_lufs=-25.0), ControllerParams(new_work_fade_db=12.0, new_work_fade_s=1.5, listen_s=2.0))
+    c.phase = Phase.STEADY; c._last_signal_t = 0.0; c._ramp.retarget(0.0, -6.0, 0.0)
+    r = LoudnessReading(momentary=-30.0, short_term=-30.0, integrated=-30.0, peak_dbfs=-10.0, has_signal=True)
+    c.notify_new_work(1.0, None, -6.0)
+    c.update(r, 1.06)                                    # the dip has landed, the rise is scheduled
+    assert abs(c._ramp.value(1.06) + 18.0) < 0.3
+    c.update(r, 1.8)
+    g = c._ramp.value(1.8)
+    assert -18.0 < g < -6.0                              # half way up
+    c.update(r, 2.7)
+    assert abs(c._ramp.value(2.7) + 6.0) < 1e-6          # at the remembered gain after fade_s

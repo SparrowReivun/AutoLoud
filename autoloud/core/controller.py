@@ -83,6 +83,8 @@ class ControllerParams:
     cut_pulls_fader: bool = False        # every protection cut the sole app trips pulls its fader down by the excess over B - 5, for good
     intro_below_platform_db: float = 6.0 # source mode: a source this far under the app's quiet platform is an intro / fade: never raised (0 = off)
     new_work_steady: bool = True         # a new work starts in the steady state: it is re-adjusted only after the steady block counts
+    new_work_fade_db: float = 12.0       # a new work starts this far UNDER its remembered gain and fades in (0 = jump straight there)
+    new_work_fade_s: float = 1.5         # ... over this long; protection still fires during the fade
 
 
 @dataclass
@@ -139,6 +141,8 @@ class GainController:
         self._gain_hist: deque[tuple[float, float]] = deque()
         self._source_est: float = MIN_LUFS
         self._safety_t: float | None = None
+        self._fade_rise: tuple[float, float, float] | None = None   # (start, end_db, dur): the rise half of a fade-in
+        self._fade_until, self._fade_end_db = -1e9, 0.0            # while now < _fade_until the fade's end is "the gain"
         self._pre_safety_gain: float | None = None   # gain before the last protection cut
         self._safety_guard_until: float = 0.0        # no protection cuts before this (B shift landing)
         self._last_r: LoudnessReading | None = None
@@ -254,18 +258,32 @@ class GainController:
         """
         if self.phase in (Phase.IDLE, Phase.ONSET):
             return                      # the onset guard already handles the start
+        p = self.params
         if remembered_gain_db is not None:
-            self._ramp.retarget(now, self._clamp(remembered_gain_db), self.params.move_ramp_s)
-            self._log(now, "new_work", mode="remembered", gain=self._ramp.end_db)
+            end = self._clamp(remembered_gain_db); mode = "remembered"
         else:
-            self._ramp.retarget(now, self._clamp(self._ramp.value(now) + self.params.first_time_offset_db), self.params.move_ramp_s)
-            self._log(now, "new_work", mode="first", gain=self._ramp.end_db)
+            end = self._clamp(self._ramp.value(now) + p.first_time_offset_db); mode = "first"
+        if p.new_work_fade_db > 0 and p.new_work_fade_s > 0:
+            # Fade in instead of jumping: the first second of a louder-than-last-time work is
+            # the classic blast. Drop at once to end - fade, then rise to end over fade_s; the
+            # protection rule still fires during the rise, and the first block is measured
+            # once the rise is over.
+            self._ramp.retarget(now, self._clamp(end - p.new_work_fade_db), 0.05)
+            self._fade_rise = (now + 0.05, end, p.new_work_fade_s)
+            self._fade_until, self._fade_end_db = now + 0.05 + p.new_work_fade_s, end
+            settle = 0.05 + p.new_work_fade_s
+            self._log(now, "new_work", mode=mode, gain=end, fade=p.new_work_fade_db, dur=p.new_work_fade_s)
+        else:
+            self._fade_rise = None
+            self._ramp.retarget(now, end, p.move_ramp_s)
+            settle = p.move_ramp_s
+            self._log(now, "new_work", mode=mode, gain=end)
         # start steady (the remembered gain was right for this app last time): the steady
         # block counts decide whether it is too loud / too quiet, not the first block alone
-        self.phase = Phase.STEADY if self.params.new_work_steady else Phase.ADJUST
+        self.phase = Phase.STEADY if p.new_work_steady else Phase.ADJUST
         self._over_blocks = self._under_blocks = 0
         self._up_streak, self._fresh = 0, True
-        self._arm_block(now + self.params.move_ramp_s, meter)
+        self._arm_block(now + settle, meter)
 
     def _intro_hold(self) -> bool:
         """Source mode: the sole app is far under its own quiet platform - an intro,
@@ -301,6 +319,7 @@ class GainController:
         new_gain = self._clamp(new_gain)
         self._ramp.retarget(now, new_gain, p.move_ramp_s)
         self._pre_safety_gain = None                   # the user has set a new level
+        self._fade_rise = None                         # ... which overrides a fade-in in progress
         self._up_streak, self._fresh = 0, False
         self._safety_guard_until = now + p.move_ramp_s + 1.0   # momentary lags ~0.4 s
         self._log(now, "b_shift", delta=delta_db, gain=new_gain, b=T.b_lufs, dur=p.move_ramp_s)
@@ -400,6 +419,11 @@ class GainController:
         p, T = self.params, self.targets
         if meter is not None:
             self._meter = meter
+        if self._fade_rise is not None and now >= self._fade_rise[0]:
+            _, end, dur = self._fade_rise
+            self._fade_rise = None
+            if self.phase not in (Phase.SAFETY, Phase.IDLE):   # a cut during the dip wins
+                self._ramp.retarget(now, end, dur)
         g_now = self._ramp.value(now)
         self._record_gain(now, self._visible_gain(g_now) + extra_visible_db)
         self._last_r, self._last_extra = r, extra_visible_db
@@ -445,7 +469,10 @@ class GainController:
                 self._ramp.retarget(now, self._clamp(g_now - cut), p.safety_ramp_s)
                 if self.phase != Phase.SAFETY:
                     safety_now = True
-                    self._pre_safety_gain = g_now
+                    # a cut in the dip of a fade-in: "before" is where the fade was heading,
+                    # not the dip itself (an intrusion cut moved to the app must land there)
+                    self._pre_safety_gain = self._fade_end_db if now < self._fade_until else g_now
+                    self._fade_rise = None; self._fade_until = -1e9
                 self._log(now, "safety", perceived=perceived_now, excess=excess,
                           cut=cut, gain=self._ramp.end_db)
                 self.phase = Phase.SAFETY

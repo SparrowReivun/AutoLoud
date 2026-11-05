@@ -28,7 +28,7 @@ def test_intrusion_is_cut_per_app_not_on_the_bus():
         assert cut and cut > 3.0, cut                 # the ding alone was cut
         time.sleep(0.8)
         g_after = eng.state.command.total_db
-        assert g_after > g_before - 3.0, (g_before, g_after)   # the bus did not collapse
+        assert g_after > g_before - 3.5, (g_before, g_after)   # the bus did not collapse (a first-time work may sit first_time_offset lower)
         be.remove_source(key.key)
         t0 = time.time()
         while time.time() - t0 < 5.0 and "ding.exe" in eng._app_cut:

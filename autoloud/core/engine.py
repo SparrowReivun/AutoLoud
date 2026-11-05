@@ -55,7 +55,7 @@ B_MUTE_LUFS = -90.0   # the P slider's bottom: auto apps are muted outright
 
 class Engine:
     CONTROL_HZ = 50
-    SESSION_POLL_S = 0.5
+    SESSION_POLL_S = 0.25   # a session Windows just created plays at 100 % until the next poll: keep that short
 
     def __init__(self, backend: Backend, config: AppConfig):
         self.backend = backend
@@ -624,7 +624,17 @@ class Engine:
         if self.config.monitor_only:
             return                      # nothing is moved, so nothing is attributed or pulled
         snd = self._sounding(sessions)
-        new = [s for s in snd if now - self._sound_since.get(s.name, -1e9) < 1.2]
+        fades = getattr(self, "_session_fade", {})
+        ends = getattr(self, "_fade_end", {})
+        fade_s = self.config.params.new_work_fade_s
+        def started(s):
+            t0 = self._sound_since.get(s.name, -1e9)
+            if s.key in fades:                      # still fading in: its real level is only now arriving
+                t0 = max(t0, fades[s.key] + fade_s)
+            elif s.key in ends:
+                t0 = max(t0, ends[s.key])
+            return t0
+        new = [s for s in snd if now - started(s) < 1.2]
         old = [s for s in snd if s.name not in {n.name for n in new}]
         if new and old and self.controller is not None:
             undone = self.controller.move_cut_to_app(now, self.meter)
@@ -1014,9 +1024,30 @@ class Engine:
             wsum += w; xsum += w * (applied - own_visible)
         self._extra_visible_db = (xsum / wsum) if wsum > 0 else 0.0
 
+        # A session we have never set (just created by Windows, at 100 %) is not put straight
+        # at its gain but a fade below it, rising over new_work_fade_s: the first second of a
+        # new player / tab / notification is the classic blast.
+        fade_db, fade_s = cfg.params.new_work_fade_db, cfg.params.new_work_fade_s
+        now_t = time.perf_counter()
+        fades = getattr(self, "_session_fade", None)
+        if fades is None:
+            fades = self._session_fade = {}
         for s in apps:
             db = min(0.0, desired[s.key] - P)
             prev = self._applied_session_db.get(s.key)
+            if prev is None and fade_db > 0 and fade_s > 0 and s.key not in fades:
+                fades[s.key] = now_t
+            t_f = fades.get(s.key)
+            if t_f is not None:
+                left = 1.0 - (now_t - t_f) / fade_s
+                if left <= 0:
+                    fades.pop(s.key, None)
+                    ends = getattr(self, "_fade_end", None)
+                    if ends is None:
+                        ends = self._fade_end = {}
+                    ends[s.key] = t_f + fade_s
+                else:
+                    db = max(-120.0, db - fade_db * left)
             want = 0.0 if db <= -119.9 else 10 ** (db / 20)
             # Windows re-creates a session (default-device switch, a new stream) at its own
             # stored volume: if what the session reports drifts from what we set, set it again

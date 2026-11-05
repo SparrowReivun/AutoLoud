@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fade-in instead of a blast: a new work in a playing app now starts 12 dB under its remembered gain and rises to it over 1.5 s (preset parameters "fade-in dB / s"; 0 = the old jump); the protection rule still fires during the rise, and an intrusion cut landing in the dip is moved to the app at the fade's end gain. A session Windows has just created (new player, tab, notification - it plays at 100 % until we touch it) gets the same fade on its first volume. Sessions are polled every 0.25 s (was 0.5) so that first touch comes sooner.
 - The master-visibility probe the wizard used to run (is the Windows master inside the loopback?) now runs by itself, once per device, the first time a master boost of more than 2 dB is needed while something plays (a 6 dB dip for ~1.6 s). Needed for a low parked master (e.g. 25 %) where boosts become common.
 
 ## Unreleased
