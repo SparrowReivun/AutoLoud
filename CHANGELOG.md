@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.4.5 — 2026-11-05
 
 - Fix runaway P changes after a Windows master-volume move when startup master parking is disabled: the same unacknowledged master delta was converted into a new volume-key step on every session poll (seen 2026-11-05 09:19:42–09:22:48). Restore the previous master level even without scalar parking, acknowledge each observed move once, and use actual driver readback rather than requested dB as the external-change baseline. Driver rounding and failed restores no longer create repeated preference changes.
 - Isolate all pytest configuration/log storage on Windows as well as Linux. Existing tests set only `XDG_CONFIG_HOME`, so Windows engine tests could overwrite the real `%APPDATA%/AutoLoud/config.json`, replacing source mode with fixed T=P and disabling startup parking. Add regressions for storage isolation, one-step master handling, driver quantization, restore failure, and preservation of T/u across P adjustments.
+## 0.4.4 — 2026-11-05
+
 - Fix continuing native memory growth in Core Audio session polling: on Windows 11, a cached `IAudioSessionManager2` retained about 30 MiB per 10,000 enumerations despite the existing COM string fix. Acquire and release the manager per poll while keeping volume/meter caches keyed by session instance. Use `QueryInterface` for independently owned activated interface pointers instead of casting pycaw's `IUnknown` pointer. Add a read-only Windows integration regression check for poll memory growth.
 - Fix excessive Windows startup commit: on the reported machine, importing NumPy and SciPy alone committed about 1,293 MiB before any audio polling. Default OpenBLAS to one thread before either library loads; the same imports then committed about 71 MiB. This avoids large native thread-pool allocations for small audio blocks and preserves an explicit `OPENBLAS_NUM_THREADS` override. Applies to source and packaged entry points. This is a startup allocation, not evidence of a continuing leak; the existing COM string fix and long-run diagnostics remain relevant.
 - Add fresh-process tests for early runtime configuration, explicit overrides, and Windows app-import private commit below 512 MiB.
