@@ -1,29 +1,10 @@
 # Changelog
 
-## Unreleased
-
-- Mixer: "System sounds" (Windows notification / error dings, pid 0) now starts with its fader at −40 dB instead of 0 dB: at a quiet listening level an unattenuated ding is far louder than the content. The entry is created as soon as the session is seen, so the default applies even before the mixer page is opened. Existing configs: a System sounds fader still at 0 dB is moved to −40 dB once (presets_version 8); any other value the user set is kept.
-
-## 0.4.5 — 2026-11-05
-
-- Fix runaway P changes after a Windows master-volume move when startup master parking is disabled: the same unacknowledged master delta was converted into a new volume-key step on every session poll (seen 2026-11-05 09:19:42–09:22:48). Restore the previous master level even without scalar parking, acknowledge each observed move once, and use actual driver readback rather than requested dB as the external-change baseline. Driver rounding and failed restores no longer create repeated preference changes.
-- Isolate all pytest configuration/log storage on Windows as well as Linux. Existing tests set only `XDG_CONFIG_HOME`, so Windows engine tests could overwrite the real `%APPDATA%/AutoLoud/config.json`, replacing source mode with fixed T=P and disabling startup parking. Add regressions for storage isolation, one-step master handling, driver quantization, restore failure, and preservation of T/u across P adjustments.
-
-## 0.4.4 — 2026-11-05
-
-- Fix continuing native memory growth in Core Audio session polling: on Windows 11, a cached `IAudioSessionManager2` retained about 30 MiB per 10,000 enumerations despite the existing COM string fix. Acquire and release the manager per poll while keeping volume/meter caches keyed by session instance. Use `QueryInterface` for independently owned activated interface pointers instead of casting pycaw's `IUnknown` pointer. Add a read-only Windows integration regression check for poll memory growth.
-- Fix excessive Windows startup commit: on the reported machine, importing NumPy and SciPy alone committed about 1,293 MiB before any audio polling. Default OpenBLAS to one thread before either library loads; the same imports then committed about 71 MiB. This avoids large native thread-pool allocations for small audio blocks and preserves an explicit `OPENBLAS_NUM_THREADS` override. Applies to source and packaged entry points. This is a startup allocation, not evidence of a continuing leak; the existing COM string fix and long-run diagnostics remain relevant.
-- Add fresh-process tests for early runtime configuration, explicit overrides, and Windows app-import private commit below 512 MiB.
-
-## 0.4.3 — 2026-11-04
-
-- Fresh-config defaults follow the author's machine: built-in 强力1 protection at T + 17.5 (was 18); master volume left on exit / crash 40 % (was 1 %); mixer fader range +40 dB (the dataclass said 15 while loading said 40). Existing configs keep their own values.
-- Fix: Windows ran out of memory after hours of running, the Windows Audio service died, every output device vanished, and the Start menu / shutdown hung until a hard reset (2026-11-03 19:24 and 2026-11-04 18:04). Event 2004 (Resource-Exhaustion-Detector) named python.exe = AutoLoud with 1.8–1.9 GB of virtual memory, while `autoloud.log` said 157 MB RSS (RSS is the working set, which Windows trims; leaked pages that are never touched again drop out of it). Cause: pycaw declares `GetSessionInstanceIdentifier` / `GetId` / `GetDisplayName` as `[out] LPWSTR`, and comtypes hands back a Python string without `CoTaskMemFree`-ing the COM buffer, so every call leaked the string natively. The session poll read every session's instance id twice a second. These strings are now read through the raw vtable slot and freed (`_com_str`); the per-session meter interface is also cached per session instance instead of re-queried on every poll. Backend version 0.8-freestrings.
-- Memory diagnostics (`autoloud/core/memdiag.py`): the 10-min `memory:` line in `autoloud.log` now carries private bytes (what event 2004 counts), Python allocator blocks and object count (Python vs native leak), threads, the system's free commit / commit limit, and the PID (to match event 2004). Over 1 GB of private bytes (then every further 512 MB) a warning goes to `autoloud.log` and the activity log suggests a restart. `AUTOLOUD_TRACEMALLOC=1` also logs the five source lines whose Python allocations grew most per interval.
-- `tools/com_leak_check.py`: runs the session poll N times with the old and the new code path and prints the private-bytes growth of each (Windows).
-
 ## 0.4.2 — 2026-11-03
 
+- No more calibration: the wizard, the "re-calibrate" button and the "not calibrated" badge are gone. A new device starts with the P of the device used last (−30 LUFS the very first time) and P is simply the dashboard slider.
+- P is shown as a percentage: 0 % = mute (−90 LUFS) … 100 % = 0 LUFS, linear in dB (1 % = 0.9 dB); the LUFS value is in the tooltip. Logs and the meters keep LUFS.
+- `config.json` now lives next to the program (portable: copy the folder, the settings come along); a config still in `%APPDATA%\AutoLoud` is copied over once (the old file stays as a backup). Falls back to `%APPDATA%` when the program folder is not writable; `AUTOLOUD_CONFIG_DIR` overrides.
 - Dashboard: "Start AutoLoud with Windows (recommended)" tick box - a Run entry for the current user (no admin), pointing at this installation (the exe, or pythonw run.py from source); the box shows the registry's actual state.
 - Built-in 强力1 follows the author's current tuning: dead band ±0.5 dB, snap 1 dB, steps +0.5 / −1 dB (half the error when far), steady: 2 loud blocks over T + 2.5, 3 quiet blocks under T − 4, protection T + 18, X = 11 LU, boost cap 38 dB.
 - MemoryError after ~4 h: every engine state change (100+ per second) was also posted to the GUI thread as a queued signal carrying a state snapshot; whenever the GUI thread fell behind, that queue only grew. The UI now only polls the state 10x a second (it already did). The process's memory is logged every 10 min in `autoloud.log`.

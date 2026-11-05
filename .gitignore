@@ -15,3 +15,4 @@ assets/music/default/*
 # plot_app.py output in the project root
 /*.png
 /logs/
+/config.json

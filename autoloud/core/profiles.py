@@ -37,7 +37,16 @@ def params_from_dict(d: dict) -> ControllerParams:
                                if k in ControllerParams.__dataclass_fields__ and k not in INTERNAL_PARAMS})
 
 
-def config_dir() -> Path:
+def app_dir() -> Path:
+    """Where the program lives: next to AutoLoud.exe, or the project root from source."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[2]
+
+
+def roaming_dir() -> Path:
+    """The per-user folder (%APPDATA%\\AutoLoud): where config.json lived before 0.4.2,
+    and the fall-back when the program's own folder cannot be written."""
     if sys.platform.startswith("win"):
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     else:
@@ -47,11 +56,38 @@ def config_dir() -> Path:
     return d
 
 
-def app_dir() -> Path:
-    """Where the program lives: next to AutoLoud.exe, or the project root from source."""
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parents[2]
+def _writable(d: Path) -> bool:
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        probe = d / ".write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        return True
+    except Exception:
+        return False
+
+
+def config_dir() -> Path:
+    """Where config.json lives: next to the program (portable - copy the folder
+    and the settings travel with it), unless that folder cannot be written
+    (Program Files) - then the per-user folder. ``AUTOLOUD_CONFIG_DIR``
+    overrides. A config still in the per-user folder is copied over once."""
+    override = os.environ.get("AUTOLOUD_CONFIG_DIR")
+    if override:
+        d = Path(override); d.mkdir(parents=True, exist_ok=True); return d
+    if "XDG_CONFIG_HOME" in os.environ and not sys.platform.startswith("win"):
+        return roaming_dir()                       # tests / Linux dev: keep the old behaviour
+    d = app_dir()
+    if not _writable(d):
+        return roaming_dir()
+    here, old = d / "config.json", roaming_dir() / "config.json"
+    if not here.exists() and old.exists():
+        try:
+            import shutil
+            shutil.copy2(old, here)                # one-time migration; the old file is left as a backup
+        except Exception:
+            pass
+    return d
 
 
 def log_dir() -> Path:
@@ -59,17 +95,8 @@ def log_dir() -> Path:
     written (e.g. installed under Program Files) - then the config folder.
     ``AUTOLOUD_LOG_DIR`` overrides both."""
     override = os.environ.get("AUTOLOUD_LOG_DIR")
-    candidates = [Path(override)] if override else [app_dir() / "logs"]
-    for d in candidates:
-        try:
-            d.mkdir(parents=True, exist_ok=True)
-            probe = d / ".write-test"
-            probe.write_text("ok", encoding="utf-8")
-            probe.unlink()
-            return d
-        except Exception:
-            continue
-    return config_dir()
+    d = Path(override) if override else app_dir() / "logs"
+    return d if _writable(d) else roaming_dir()
 
 
 MODE_SLUGS = {"默认": "default", "强力": "strong", "强力1": "strong1"}
@@ -131,14 +158,14 @@ class AppConfig:
     volume_keys: bool = True      # volume keys / knob adjust B instead of the Windows master volume
     sync_default_device: bool = True   # picking a device on the dashboard also makes it the Windows default output
     monitor_only: bool = False         # dashboard "monitor only": measure and show everything, touch no volume
-    exit_master_percent: float = 40.0  # master volume to leave on exit / crash (-1 = what it was before start-up; unreliable, off by default)
+    exit_master_percent: float = 1.0   # master volume to leave on exit / crash (-1 = what it was before start-up; unreliable, off by default)
     master_before_percent: float = -1.0   # the master level found at start-up (persisted so a crash does not lose it)
     volume_key_step_db: float = 0.4
     language: str = ""            # "" = pick from the Windows UI language on first run
     config_version: int = 4       # bump when ControllerParams defaults change
     memory_version: int = 2       # bump to forget every app's remembered gain once
-    presets_version: int = 8      # bump to add new built-in presets once (2: 强力1; 3: steady triggers; 4/5/6: startup master -> 80 %, key step 0.5; 7: exit master 1 %; 8: System sounds fader -40 dB)
-    mixer_range_db: float = 40.0  # fader top (+dB); bottom is mute
+    presets_version: int = 7      # bump to add new built-in presets once (2: 强力1; 3: steady triggers; 4/5/6: startup master -> 80 %, key step 0.5; 7: exit master 1 %)
+    mixer_range_db: float = 15.0  # fader top (+dB); bottom is mute
     apps: dict[str, AppMix] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
@@ -161,9 +188,9 @@ class AppConfig:
             cfg.volume_keys = bool(raw.get("volume_keys", True))
             cfg.sync_default_device = bool(raw.get("sync_default_device", True))
             cfg.monitor_only = bool(raw.get("monitor_only", False))
-            cfg.exit_master_percent = float(raw.get("exit_master_percent", 40.0))
+            cfg.exit_master_percent = float(raw.get("exit_master_percent", 1.0))
             if int(raw.get("presets_version", 1)) < 7 and cfg.exit_master_percent < 0:
-                cfg.exit_master_percent = 40.0              # exit level: 40 % by default (restore-before dropped)
+                cfg.exit_master_percent = 1.0               # exit level: 1 % by default (restore-before dropped)
             cfg.master_before_percent = float(raw.get("master_before_percent", -1.0))
             cfg.sidebar_collapsed = bool(raw.get("sidebar_collapsed", False))
             cfg.startup_master_percent = float(raw.get("startup_master_percent", 80.0))
@@ -193,11 +220,6 @@ class AppConfig:
             for k, v in raw.get("profiles", {}).items():
                 cfg.profiles[k] = DeviceProfile(**{kk: vv for kk, vv in v.items()
                                                    if kk in DeviceProfile.__dataclass_fields__})
-            if int(raw.get("presets_version", 1)) < 8:
-                for name, off in cls.DEFAULT_APP_OFFSETS.items():   # once: a fader still at 0 dB gets the default
-                    m = cfg.apps.get(name)
-                    if m is not None and m.offset_db == 0.0:
-                        m.offset_db = off
             cfg.ensure_presets()
             cfg.migrate_presets(int(raw.get("presets_version", 1)), strong_apps)
             return cfg
@@ -242,7 +264,7 @@ class AppConfig:
                    steady_under_db=-15.0, safety_margin_db=12.0, safety_land_db=5.0, move_ramp_s=0.2),
         "强力1": dict(onset_below_b_db=7.0, step_up_db=0.5, step_down_db=1.0, deadband_up_db=0.5, deadband_down_db=0.5,
                     snap_db=1.0, steady_trigger_db=2.5, steady_over_blocks=2, steady_under_db=-4.0, steady_under_blocks=3,
-                    safety_margin_db=17.5, safety_land_db=4.0, move_ramp_s=0.4, work_silence_s=10.0,
+                    safety_margin_db=18.0, safety_land_db=4.0, move_ramp_s=0.4, work_silence_s=10.0,
                     max_master_boost_db=38.0, target_mode="source", source_range_db=11.0, source_hold_s=60.0),
     }
 
@@ -329,17 +351,23 @@ class AppConfig:
         m = self.apps.get(app_name)
         return (m.alias.strip() if m and m.alias.strip() else app_name)
 
-    # Mixer fader a newly seen app starts at (dB). Windows system sounds (pid 0:
-    # notification / error dings) are far louder than anything else at a quiet
-    # listening level, so they start well down.
-    DEFAULT_APP_OFFSETS: ClassVar[dict] = {"System sounds": -40.0}
-
     def mix_for(self, app_name: str) -> AppMix:
         if app_name not in self.apps:
-            self.apps[app_name] = AppMix(offset_db=self.DEFAULT_APP_OFFSETS.get(app_name, 0.0))
+            self.apps[app_name] = AppMix()
         return self.apps[app_name]
 
+    DEFAULT_P_LUFS = -30.0        # a never-seen device starts here (the slider is the whole "calibration")
+
     def profile_for(self, device_id: str, device_name: str) -> DeviceProfile:
+        """A device's profile; a new device inherits P from the device used last
+        (else the default) and needs no calibration - P is simply the slider."""
         if device_id not in self.profiles:
-            self.profiles[device_id] = DeviceProfile(device_id=device_id, device_name=device_name)
-        return self.profiles[device_id]
+            b = self.DEFAULT_P_LUFS
+            known = [q for q in self.profiles.values() if q.calibrated]
+            if known:
+                b = known[-1].b_lufs
+            self.profiles[device_id] = DeviceProfile(device_id=device_id, device_name=device_name,
+                                                     calibrated=True, b_lufs=b)
+        prof = self.profiles[device_id]
+        prof.calibrated = True
+        return prof
