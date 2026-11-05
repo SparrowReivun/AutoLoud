@@ -4,8 +4,6 @@
 
 ### From constant volume adjustments to consistently comfortable listening.
 
-**Stop adjusting the volume. Just enjoy the sound.**
-
 *You adjust once. We handle the rest.*
 
 [简体中文](README.md) · [**English**](README.en.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Русский](README.ru.md) · [Latest release](https://github.com/SparrowReivun/AutoLoud/releases) · [Report an issue](https://github.com/SparrowReivun/AutoLoud/issues)
