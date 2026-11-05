@@ -900,11 +900,20 @@ class Engine:
             presses = max(1, int(round(abs(sc - parked) / 0.02))) if (sc is not None and parked is not None) else 1
             presses = min(presses, 10)
             step = self.config.volume_key_step_db * presses * (1 if delta > 0 else -1)
-            if parked is not None:
-                try:
+            # Consume this observed change exactly once, even if restoring the
+            # master fails. Without a configured startup park, the old baseline
+            # was never updated, turning one move into another P nudge per poll.
+            previous_master = self._applied_master_db
+            self._applied_master_db = master_db
+            try:
+                if parked is not None:
                     self.backend.set_master_scalar(self.device, parked)
-                except Exception:
-                    log.exception("re-park master")
+                else:
+                    self.backend.set_master_db(self.device, previous_master)
+                self._applied_master_db = float(self.backend.get_master_db(self.device))
+            except Exception:
+                log.exception("re-park master")
+                self._master_target_db = None     # retry our write, without repeating the P nudge
             log.info("master moved by %+.1f dB behind the hook (%d press(es)): P %+.1f dB, master parked again", delta, presses, step)
             self._event("volkey_master", delta=step, presses=presses)
             self.nudge_b(step, kind="volkey_master")
@@ -1016,12 +1025,18 @@ class Engine:
                     log.warning("set volume for %s timed out; skipping it this tick", s.name)
         self._sessions_parked = True
         target_master = self.profile.master_ref_db + P
-        if self._applied_master_db is None or abs(self._applied_master_db - target_master) > 0.05:
+        target_master = max(lo, min(hi, target_master))
+        last_target = getattr(self, "_master_target_db", self._applied_master_db)
+        if self._applied_master_db is None or last_target is None or abs(last_target - target_master) > 0.05:
             try:
-                self.backend.set_master_db(self.device, max(lo, min(hi, target_master)))
-                self._applied_master_db = target_master
+                self.backend.set_master_db(self.device, target_master)
+                self._master_target_db = target_master
+                # Drivers can quantize/clamp a successful write. Compare future
+                # external moves with readback, not an unattainable requested dB.
+                self._applied_master_db = float(self.backend.get_master_db(self.device))
             except Exception:
                 log.exception("set master")
+                self._applied_master_db = None     # no trustworthy baseline until readback succeeds
 
     def emergency_exit(self) -> None:
         """Called from the crash handlers: put the volumes back as a normal exit would."""
