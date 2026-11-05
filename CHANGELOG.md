@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fix continuing native memory growth in Core Audio session polling: on Windows 11, a cached `IAudioSessionManager2` retained about 30 MiB per 10,000 enumerations despite the existing COM string fix. Acquire and release the manager per poll while keeping volume/meter caches keyed by session instance. Use `QueryInterface` for independently owned activated interface pointers instead of casting pycaw's `IUnknown` pointer. Add a read-only Windows integration regression check for poll memory growth.
+- Fix excessive Windows startup commit: on the reported machine, importing NumPy and SciPy alone committed about 1,293 MiB before any audio polling. Default OpenBLAS to one thread before either library loads; the same imports then committed about 71 MiB. This avoids large native thread-pool allocations for small audio blocks and preserves an explicit `OPENBLAS_NUM_THREADS` override. Applies to source and packaged entry points. This is a startup allocation, not evidence of a continuing leak; the existing COM string fix and long-run diagnostics remain relevant.
+- Add fresh-process tests for early runtime configuration, explicit overrides, and Windows app-import private commit below 512 MiB.
+
 ## 0.4.3 — 2026-11-04
 
 - Fresh-config defaults follow the author's machine: built-in 强力1 protection at T + 17.5 (was 18); master volume left on exit / crash 40 % (was 1 %); mixer fader range +40 dB (the dataclass said 15 while loading said 40). Existing configs keep their own values.

@@ -98,5 +98,7 @@ tools/plot_volume.py          用户操作 vs 自动增益（--list 列运行）
 ## 9. 待办 / 开放问题
 
 - 0.4.3 Release：推 `v0.4.3` 标签后看 Actions 是否完整打包（0.4.2 起的目录版）。
-- 慢泄漏：0.4.3 修了 LPWSTR 字符串泄漏（见第 8 节）。看新版 `memory:` 行的 private 趋势确认是否已平；若仍涨，看 py 是否同涨（Python 侧 → 开 AUTOLOUD_TRACEMALLOC）还是只有 private 涨（再查 winsdk 媒体会话、PortAudio）。`tools/com_leak_check.py` 可对比新旧路径。
+- 启动提交量（2026-11-05 实测）：本机仅导入 NumPy + SciPy 即从约 9 MiB private 升至 1293 MiB；导入前设 `OPENBLAS_NUM_THREADS=1` 后约 71 MiB。`autoloud/__init__.py` 现在默认设置单线程，保留显式环境变量；必须在首次导入数值库前生效。这解释了启动即约 1.4 GiB 的大额提交，不能把高 private 快照直接认定为持续泄漏。
+- 会话轮询仍有原生增长（2026-11-05 实测）：修复字符串释放后，长期缓存的 `IAudioSessionManager2` 每 10,000 次枚举仍保留约 30 MiB。现在每轮创建并释放 manager，连续批次占用保持约 23 MiB；会话音量/峰值接口仍按实例缓存。pycaw 把 `Activate` 返回值声明成 `IUnknown`，转换接口用 `QueryInterface` 获取独立引用，避免裸 cast 导致所有权不清。
+- 慢泄漏：0.4.3 修了 LPWSTR 字符串泄漏（见第 8 节）。仍需看新版 `memory:` 行的 private 趋势；若仍涨，看 py 是否同涨（Python 侧 → 开 AUTOLOUD_TRACEMALLOC）还是只有 private 涨（再查 winsdk 媒体会话、PortAudio）。`tools/com_leak_check.py` 可对比新旧路径。
 - 对照实验设计：每位受试者每种条件各开一次（或切一次模式），用 `plot_volume.py` 对比操作次数与幅度。
