@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The one-time copy of `%APPDATA%\AutoLoud\config.json` into the program folder now renames the old file to `config.json.migrated`, so a later fresh unzip starts from the shipped defaults instead of inheriting that old copy again (every new download used to come up with the pre-0.4.6 settings).
 - An app's remembered gain (`last_gain_db`) is learned only while that app has LED the mix for 5 s or more. A session that merely existed (WeChat's, always open) used to copy whatever gain the music had, and a one-second notification never has a gain of its own. Likewise a new work in an app that took the lead less than 5 s ago (a notification over music) is treated as an intrusion - cut on that app - and does not re-target the bus.
 - Fresh-config defaults follow the author's machine: startup master 70 % (was 80), 强力1 protection T + 14 (was 17.5), P for a never-seen device −42 LUFS, and notification apps (System sounds, WeChat, Windows Settings) start with their fader at −5 dB (was −40 for System sounds only).
 - New sessions are caught the instant Windows creates them (IAudioSessionNotification on the Core Audio thread): the session's start volume - its bus gain or fader minus the fade-in depth - is applied before it has played a buffer, so a new player / tab / notification no longer gets its first quarter second at 100 %. The activity log says "X opened a session: set to … dB before its first sound".

@@ -86,6 +86,9 @@ def config_dir() -> Path:
         try:
             import shutil
             shutil.copy2(old, here)
+            # migrated once: rename the old file so a later fresh unzip starts from the
+            # shipped defaults instead of silently inheriting this stale copy again
+            old.rename(old.with_name("config.json.migrated"))
         except Exception:
             pass
     return d
