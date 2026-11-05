@@ -899,6 +899,15 @@ class MainWindow(QMainWindow):
 
     def _on_state(self, s: EngineState):
         self._latest = s
+        if s.follow_device is not None and self.engine.device is not None and s.follow_device.id != self.engine.device.id:
+            # Windows' default output moved (Bluetooth device came or went): follow it without
+            # touching the default ourselves (that is what set_default_output would do)
+            d = s.follow_device
+            self.engine._set_state(follow_device=None)
+            self.engine.start(d)
+            self.engine.config.save()
+            self.dash.refresh_devices()
+            return
         if not self.isVisible():
             return
         self.dash.update_state(s)

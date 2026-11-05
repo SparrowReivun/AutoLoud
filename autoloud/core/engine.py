@@ -47,6 +47,7 @@ class EngineState:
     safety_count: int = 0            # increments on every new cut (UI shows the notice on change)
     error: str = ""
     source: tuple = ("", None, None, None)   # (sole app, its source LUFS, platform lo, platform hi)
+    follow_device: OutputDevice | None = None   # Windows' default output moved (a Bluetooth device came or went): the UI switches to it
     mode_name: str = ""                       # preset the bus is running with right now
 
 
@@ -149,6 +150,8 @@ class Engine:
             self._set_state(error="No output device found")
             return
         self.device = device
+        self._follow_pending = False
+        self._default_seen = None
         self.profile = self.config.profile_for(device.id, device.name)
         self.config.selected_device_id = device.id
         self.config.enabled = True            # the bus is always on; "modes" are presets
@@ -249,9 +252,36 @@ class Engine:
     # ------------------------------------------------------------------
     # capture watchdog
     CAPTURE_STALL_S = 2.0       # no loopback data this long while an app sounds = the stream died
-    CAPTURE_RETRY_S = 5.0
+    CAPTURE_RETRY_S = 5.0       # first retry; then 15, 45, 135 s ... (x3 each time it stalls again), capped
+    CAPTURE_RETRY_MAX_S = 180.0
+    DEFAULT_CHECK_S = 3.0       # how often Windows' default output is looked at
     _SILENT = LoudnessReading(momentary=MIN_LUFS, short_term=MIN_LUFS, integrated=MIN_LUFS,
                               peak_dbfs=-100.0, has_signal=False)
+
+    def _default_watch(self, now: float) -> None:
+        """Windows' default output changed under us (a Bluetooth headset or
+        glasses connected / dropped): follow it - never fight it. The actual
+        switch is done by the UI thread (engine.start), this only notices."""
+        if now - getattr(self, "_default_t", 0.0) < self.DEFAULT_CHECK_S or self.device is None:
+            return
+        self._default_t = now
+        try:
+            d = self.backend.default_output_device()
+        except Exception:
+            return
+        if d is None:
+            return
+        last = getattr(self, "_default_seen", None)
+        if last is None:
+            self._default_seen = d.id
+            return
+        if d.id != last:
+            self._default_seen = d.id
+            if d.id != self.device.id and not getattr(self, "_follow_pending", False):
+                self._follow_pending = True
+                log.info("Windows default output moved to %r: following it", d.name)
+                self._event("follow_default", name=d.name)
+                self._set_state(follow_device=d)
 
     def _memory_watch(self, now: float) -> None:
         """Every 10 min: the process's memory in autoloud.log - private bytes,
@@ -272,11 +302,17 @@ class Engine:
         meter says it is sounding, the capture is restarted."""
         stale = now - self._last_audio_t > self.CAPTURE_STALL_S
         if not stale:
+            if getattr(self, "_capture_stalls", 0) and now - self._last_capture_retry > 30.0:
+                self._capture_stalls = 0            # it has been flowing for 30 s: start the back-off over
             return r
-        if self._sounding(sessions) and now - self._last_capture_retry > self.CAPTURE_RETRY_S:
+        wait = min(self.CAPTURE_RETRY_MAX_S, self.CAPTURE_RETRY_S * (3 ** getattr(self, "_capture_stalls", 0)))
+        if self._sounding(sessions) and now - self._last_capture_retry > wait:
             self._last_capture_retry = now
-            log.warning("loopback capture stalled for %.1f s while apps sound: restarting it", now - self._last_audio_t)
-            self._event("capture_restart")
+            self._capture_stalls = getattr(self, "_capture_stalls", 0) + 1
+            nxt = min(self.CAPTURE_RETRY_MAX_S, self.CAPTURE_RETRY_S * (3 ** self._capture_stalls))
+            log.warning("loopback capture stalled for %.1f s while apps sound: restarting it (attempt %d, next in %.0f s)",
+                        now - self._last_audio_t, self._capture_stalls, nxt)
+            self._event("capture_restart", n=self._capture_stalls, next_s=nxt)
             try:
                 if self._capture_failures >= 1 and hasattr(self.backend, "_reset_pa"):
                     self.backend._reset_pa()          # the last reopen failed: the device list may be stale
@@ -317,6 +353,7 @@ class Engine:
             now = t0
             r = self._capture_watch(r, sessions, now)
             self._memory_watch(now)
+            self._default_watch(now)
             try:
                 if now >= next_poll:
                     next_poll = now + self.SESSION_POLL_S
